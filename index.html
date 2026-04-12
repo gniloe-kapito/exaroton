@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>exaroton — панель управления</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --surface2: #f1f3f5;
+    --border: rgba(0,0,0,0.07);
+    --border2: rgba(0,0,0,0.12);
+    --text: #18181b;
+    --text2: #52525b;
+    --text3: #a1a1aa;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --green-text: #15803d;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --red-text: #b91c1c;
+    --amber: #d97706;
+    --amber-light: #fef3c7;
+    --amber-text: #92400e;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-xs: 6px;
+    --shadow: 0 20px 40px -15px rgba(0,0,0,0.06);
+    --shadow-sm: 0 4px 12px -2px rgba(0,0,0,0.05);
+    --font: 'Geist', system-ui, sans-serif;
+    --mono: 'Geist Mono', monospace;
+    --transition: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  body { min-height: 100dvh; }
+
+  /* ── Login screen ── */
+  #login-screen {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: var(--bg);
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    transition: opacity .4s var(--transition), transform .4s var(--transition);
+  }
+  #login-screen.out { opacity: 0; pointer-events: none; transform: translateY(-12px); }
+
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 2.5rem;
+    box-shadow: var(--shadow);
+    animation: fadeUp .5s var(--transition) both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .login-mark {
+    width: 44px; height: 44px;
+    background: var(--green);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .login-mark svg { width: 22px; height: 22px; fill: white; }
+  .login-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px; }
+  .login-sub { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .field label { font-size: 13px; font-weight: 500; color: var(--text2); }
+  .field input {
+    padding: 10px 14px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    font-family: var(--font);
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+  }
+  .field input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+  .field input.err-input { border-color: var(--red); }
+
+  .btn-primary {
+    width: 100%; padding: 11px;
+    background: var(--green); color: white;
+    border: none; border-radius: var(--radius-sm);
+    font-family: var(--font); font-size: 14px; font-weight: 500;
+    cursor: pointer; margin-top: 8px;
+    transition: background .2s, transform .1s;
+  }
+  .btn-primary:hover { background: #15803d; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+  .err-text { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 16px; }
+
+  /* ── App ── */
+  #app { display: none; min-height: 100dvh; }
+  #app.visible { display: block; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(248,249,250,0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .topbar-mark {
+    width: 28px; height: 28px;
+    background: var(--green); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .topbar-mark svg { width: 14px; height: 14px; fill: white; }
+  .topbar-name { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .acc-pill {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface2); border-radius: 99px;
+    padding: 4px 12px 4px 4px;
+    font-size: 13px; font-weight: 500; color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .acc-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--green-light); color: var(--green-text);
+    font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .credits-badge {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--text3); padding: 0 8px;
+    border-left: 1px solid var(--border2);
+  }
+  .logout-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-xs);
+    background: transparent;
+    font-family: var(--font); font-size: 13px;
+    color: var(--text2); cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .logout-btn:hover { background: var(--red-light); color: var(--red-text); border-color: transparent; }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: calc(100dvh - 56px);
+  }
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    background: var(--surface);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sidebar-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; padding: 0 8px; margin: 12px 0 4px; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 10px; border-radius: var(--radius-xs);
+    cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text2);
+    transition: background .15s, color .15s;
+    border: none; background: transparent; width: 100%; text-align: left;
+    font-family: var(--font);
+  }
+  .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+  .sidebar-item.active { background: var(--green-light); color: var(--green-text); }
+  .sidebar-item svg { width: 15px; height: 15px; opacity: .7; flex-shrink: 0; }
+  .sidebar-item.active svg { opacity: 1; }
+  .srv-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
+  .srv-dot.on { background: var(--green); box-shadow: 0 0 0 2px rgba(22,163,74,.25); animation: pulse 2s infinite; }
+  .srv-dot.starting { background: var(--amber); animation: pulse 1s infinite; }
+  .srv-dot.stopping { background: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Main content ── */
+  .main { padding: 2rem; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn .3s var(--transition); }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── Page: Servers list ── */
+  .page-header { margin-bottom: 1.5rem; }
+  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+  .page-sub { font-size: 14px; color: var(--text2); margin-top: 2px; }
+
+  .servers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-bottom: 2rem;
+  }
+  .server-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, transform .2s var(--transition);
+  }
+  .server-card:hover { border-color: var(--border2); box-shadow: var(--shadow); transform: translateY(-2px); }
+  .server-card.selected { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.1); }
+  .sc-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .sc-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+  .sc-addr { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-top: 1px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px;
+    letter-spacing: .02em; text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .sp-on  { background: var(--green-light); color: var(--green-text); }
+  .sp-off { background: var(--surface2); color: var(--text3); }
+  .sp-start { background: var(--amber-light); color: var(--amber-text); }
+  .sp-stop  { background: var(--red-light); color: var(--red-text); }
+  .sc-metrics { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sc-metric { flex: 1; }
+  .sc-metric-label { font-size: 11px; color: var(--text3); margin-bottom: 2px; }
+  .sc-metric-val { font-size: 18px; font-weight: 600; color: var(--text); font-family: var(--mono); }
+  .sc-metric-val.small { font-size: 13px; }
+
+  /* ── Page: Server detail ── */
+  .detail-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;
+  }
+  .detail-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    padding: 8px 16px; border-radius: var(--radius-xs);
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border2);
+    background: var(--surface); color: var(--text);
+    transition: background .15s, transform .1s, border-color .15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn svg { width: 14px; height: 14px; }
+  .btn-green { background: var(--green); color: white; border-color: var(--green); }
+  .btn-green:hover { background: #15803d; border-color: #15803d; }
+  .btn-red { background: var(--red); color: white; border-color: var(--red); }
+  .btn-red:hover { background: #b91c1c; border-color: #b91c1c; }
+  .btn-ghost { border-color: transparent; background: transparent; }
+  .btn-ghost:hover { background: var(--surface2); border-color: var(--border); }
+
+  .bento {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 640px) { .bento { grid-template-columns: 1fr; } }
+  .bento-wide { grid-column: 1 / -1; }
+
+  .bento-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+    box-shadow: var(--shadow-sm);
+  }
+  .bento-card-title { font-size: 12px; font-weight: 600; color: var(--text3); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px; }
+  .big-num { font-size: 36px; font-weight: 600; color: var(--text); font-family: var(--mono); letter-spacing: -0.03em; }
+  .big-sub { font-size: 13px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
+  .tab {
+    padding: 8px 14px; font-size: 13px; font-weight: 500;
+    color: var(--text3); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+    background: none; border-top: none; border-left: none; border-right: none;
+    font-family: var(--font);
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.on { color: var(--text); border-bottom-color: var(--green); }
+
+  /* ── Section card ── */
+  .section-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.25rem;
+    box-shadow: var(--shadow-sm); margin-bottom: 1rem;
+  }
+
+  /* ── Log box ── */
+  .logbox {
+    background: #18181b; border-radius: var(--radius-sm);
+    padding: 12px 14px; font-family: var(--mono); font-size: 12px;
+    color: #a1a1aa; max-height: 220px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all; line-height: 1.6;
+  }
+  .logbox .log-time { color: #52525b; }
+  .logbox .log-ok   { color: #4ade80; }
+  .logbox .log-err  { color: #f87171; }
+  .logbox .log-cmd  { color: #60a5fa; }
+  .logbox .log-info { color: #e4e4e7; }
+
+  /* ── Command input ── */
+  .cmd-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .cmd-row input {
+    flex: 1; padding: 9px 12px;
+    font-family: var(--mono); font-size: 13px;
+    border: 1px solid var(--border2); border-radius: var(--radius-xs);
+    background: var(--bg); color: var(--text); outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .cmd-row input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.1); }
+
+  /* ── Settings ── */
+  .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; font-weight: 500; color: var(--text); }
+  .setting-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .setting-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .setting-control input[type=text], .setting-control select {
+    padding: 7px 10px; border: 1px solid var(--border2);
+    border-radius: var(--radius-xs); font-family: var(--font); font-size: 13px;
+    background: var(--bg); color: var(--text); outline: none;
+    transition: border-color .2s;
+  }
+  .setting-control input[type=text]:focus, .setting-control select:focus { border-color: var(--green); }
+  .ram-slider-wrap { display: flex; align-items: center; gap: 10px; }
+  .ram-slider-wrap input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 140px; height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--green) 0%, var(--green) var(--pct,50%), var(--border2) var(--pct,50%), var(--border2) 100%);
+    outline: none; cursor: pointer;
+  }
+  .ram-slider-wrap input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--green);
+    cursor: pointer; box-shadow: var(--shadow-sm);
+  }
+  .ram-val { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); min-width: 36px; }
+
+  /* ── Players tab ── */
+  .player-list { display: flex; flex-direction: column; }
+  .player-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .player-row:last-child { border-bottom: none; }
+  .player-name { font-size: 14px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .player-avatar { width: 28px; height: 28px; border-radius: 6px; background: var(--surface2); display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text3); }
+  .player-actions { display: flex; gap: 4px; }
+  .player-btn { padding: 4px 10px; font-size: 12px; }
+
+  /* ── Files tab ── */
+  .file-list { display: flex; flex-direction: column; gap: 1px; }
+  .file-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: var(--radius-xs);
+    cursor: pointer; transition: background .12s;
+  }
+  .file-row:hover { background: var(--surface2); }
+  .file-icon { width: 16px; height: 16px; color: var(--text3); flex-shrink: 0; }
+  .file-name { font-size: 13px; color: var(--text); font-family: var(--mono); }
+  .file-size { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-left: auto; }
+
+  /* ── Toast ── */
+  #toast-container {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 9999;
+  }
+  .toast {
+    background: var(--text); color: white;
+    padding: 10px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    animation: toastIn .3s var(--transition);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .toast.toast-err { background: var(--red); }
+  .toast.toast-ok  { background: var(--green); }
+  @keyframes toastIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── Loading skeleton ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-xs);
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* ── Empty state ── */
+  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text3); }
+  .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: .3; }
+  .empty-state p { font-size: 14px; }
+
+  /* ── Activity log floating ── */
+  .activity-bar {
+    position: fixed; bottom: 0; left: 260px; right: 0;
+    background: rgba(24,24,27,.95);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding: 6px 1.5rem;
+    font-family: var(--mono); font-size: 12px; color: #71717a;
+    transform: translateY(100%);
+    transition: transform .3s var(--transition);
+    z-index: 40;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .activity-bar.visible { transform: translateY(0); }
+  .activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; flex-shrink: 0; }
+  @media(max-width:768px){ .activity-bar { left: 0; } }
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-mark">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+    </div>
+    <div class="login-title">Панель exaroton</div>
+    <div class="login-sub">Введите пароль для доступа</div>
+    <div class="field">
+      <label for="pw">Пароль</label>
+      <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <div class="err-text" id="login-err"></div>
+    <button class="btn-primary" id="login-btn" onclick="doLogin()">Войти</button>
+  </div>
+</div>
+
+<!-- ══ APP ════════════════════════════════════════════════════ -->
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-mark">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+      </div>
+      <span class="topbar-name">exaroton</span>
+    </div>
+    <div class="topbar-right">
+      <div class="acc-pill">
+        <div class="acc-avatar" id="t-avatar">?</div>
+        <span id="t-name">—</span>
+      </div>
+      <span class="credits-badge" id="t-credits">— cr</span>
+      <button class="logout-btn" onclick="doLogout()">Выйти</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <button class="sidebar-item active" id="nav-home" onclick="navTo('home',this)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        Серверы
+      </button>
+      <div id="sidebar-servers"></div>
+    </nav>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- Page: Home / Servers list -->
+      <div class="page active" id="page-home">
+        <div class="page-header">
+          <div class="page-title">Мои серверы</div>
+          <div class="page-sub" id="home-sub">Загрузка...</div>
+        </div>
+        <div class="servers-grid" id="servers-grid">
+          <div class="server-card"><div class="skeleton" style="height:100px;border-radius:12px;"></div></div>
+          <div class="server-card"><div class="skeleton" style="height:100px;border-radius:12px;"></div></div>
+        </div>
+      </div>
+
+      <!-- Page: Server detail -->
+      <div class="page" id="page-server">
+        <div class="detail-header">
+          <div>
+            <button class="btn btn-ghost" style="margin-bottom:8px;padding:4px 8px;font-size:12px;" onclick="navTo('home',document.getElementById('nav-home'))">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+              Все серверы
+            </button>
+            <div style="font-size:22px;font-weight:600;letter-spacing:-0.02em;" id="d-name">—</div>
+            <div style="font-size:13px;color:var(--text3);font-family:var(--mono);margin-top:2px;" id="d-addr">—</div>
+          </div>
+          <div class="detail-btns" id="d-btns">
+            <button class="btn btn-green" id="d-start" onclick="srvAct('start')">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Запустить
+            </button>
+            <button class="btn btn-red" id="d-stop" onclick="srvAct('stop')">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg> Остановить
+            </button>
+            <button class="btn" id="d-restart" onclick="srvAct('restart')">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              Перезапустить
+            </button>
+            <button class="btn" onclick="loadServer(currentSrv.id)">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+              Обновить
+            </button>
+          </div>
+        </div>
+
+        <!-- Bento metrics -->
+        <div class="bento">
+          <div class="bento-card">
+            <div class="bento-card-title">Статус</div>
+            <span class="status-pill" id="d-status-pill" style="font-size:13px;padding:5px 12px;">—</span>
+            <div class="big-sub" id="d-uptime" style="margin-top:8px;"></div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title">Игроки онлайн</div>
+            <div class="big-num" id="d-players">—</div>
+            <div class="big-sub" id="d-max-players"></div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title">Оперативная память</div>
+            <div class="big-num" id="d-ram">—</div>
+            <div class="big-sub">GB выделено</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-card-title">Версия</div>
+            <div style="font-size:17px;font-weight:600;color:var(--text);font-family:var(--mono);margin-top:4px;" id="d-ver">—</div>
+            <div class="big-sub" id="d-sw">—</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab on" onclick="detailTab('console',this)">Консоль</button>
+          <button class="tab" onclick="detailTab('cmd',this)">Команды</button>
+          <button class="tab" onclick="detailTab('players',this)">Игроки</button>
+          <button class="tab" onclick="detailTab('files',this)">Файлы</button>
+          <button class="tab" onclick="detailTab('settings',this)">Настройки</button>
+        </div>
+
+        <!-- Console tab -->
+        <div id="dtab-console" class="dtab">
+          <div class="section-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div style="font-size:13px;font-weight:500;color:var(--text2);">Журнал действий</div>
+              <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="clearLog()">Очистить</button>
+            </div>
+            <div class="logbox" id="act-log" style="height:260px;"></div>
+          </div>
+        </div>
+
+        <!-- Commands tab -->
+        <div id="dtab-cmd" class="dtab" style="display:none">
+          <div class="section-card">
+            <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:10px;">Отправить команду</div>
+            <div class="cmd-row">
+              <input type="text" id="cmd-in" placeholder="say Hello!" onkeydown="if(event.key==='Enter')sendCmd()" />
+              <button class="btn btn-green" onclick="sendCmd()">Отправить</button>
+            </div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Быстрые команды:</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('list')">list</button>
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('time set day')">time set day</button>
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('weather clear')">weather clear</button>
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('difficulty peaceful')">difficulty peaceful</button>
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('gamerule keepInventory true')">keepInventory true</button>
+              <button class="btn" style="font-size:12px;" onclick="quickCmd('save-all')">save-all</button>
+            </div>
+            <div class="logbox" id="cmd-log" style="height:180px;">— история команд —</div>
+          </div>
+        </div>
+
+        <!-- Players tab -->
+        <div id="dtab-players" class="dtab" style="display:none">
+          <div class="section-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="font-size:13px;font-weight:500;color:var(--text2);">Игроки онлайн</div>
+              <button class="btn" style="font-size:12px;" onclick="loadPlayers()">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px;"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                Обновить
+              </button>
+            </div>
+            <div id="players-list"></div>
+          </div>
+
+          <!-- Whitelist / Ops / Bans -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px;">
+            <div class="section-card" style="padding:1rem;">
+              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Whitelist</div>
+              <div id="wl-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
+              <div class="cmd-row" style="margin-top:8px;">
+                <input type="text" id="wl-in" placeholder="Ник игрока" style="font-size:12px;" />
+                <button class="btn btn-green" style="font-size:12px;padding:6px 10px;" onclick="listAction('whitelist','add',document.getElementById('wl-in').value)">+</button>
+              </div>
+            </div>
+            <div class="section-card" style="padding:1rem;">
+              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Operators</div>
+              <div id="ops-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
+              <div class="cmd-row" style="margin-top:8px;">
+                <input type="text" id="ops-in" placeholder="Ник игрока" style="font-size:12px;" />
+                <button class="btn btn-green" style="font-size:12px;padding:6px 10px;" onclick="listAction('ops','add',document.getElementById('ops-in').value)">+</button>
+              </div>
+            </div>
+            <div class="section-card" style="padding:1rem;">
+              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Banned</div>
+              <div id="banned-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
+              <div class="cmd-row" style="margin-top:8px;">
+                <input type="text" id="ban-in" placeholder="Ник игрока" style="font-size:12px;" />
+                <button class="btn btn-red" style="font-size:12px;padding:6px 10px;" onclick="listAction('banned-players','add',document.getElementById('ban-in').value)">Ban</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Files tab -->
+        <div id="dtab-files" class="dtab" style="display:none">
+          <div class="section-card">
+            <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:12px;">Файлы сервера</div>
+            <div id="files-list"></div>
+          </div>
+        </div>
+
+        <!-- Settings tab -->
+        <div id="dtab-settings" class="dtab" style="display:none">
+          <div class="section-card">
+            <div class="setting-row">
+              <div>
+                <div class="setting-label">Оперативная память</div>
+                <div class="setting-sub">Сервер должен быть остановлен</div>
+              </div>
+              <div class="setting-control">
+                <div class="ram-slider-wrap">
+                  <input type="range" id="ram-sl" min="2" max="16" step="1" value="2"
+                    oninput="updateRamSlider(this)" />
+                  <span class="ram-val" id="ram-out">2 GB</span>
+                </div>
+                <button class="btn btn-green" onclick="setRam()" style="font-size:13px;">Сохранить</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-label">MOTD</div>
+                <div class="setting-sub">Описание сервера в списке</div>
+              </div>
+              <div class="setting-control">
+                <input type="text" id="motd-in" placeholder="A Minecraft Server" style="width:220px;" />
+                <button class="btn btn-green" onclick="setMotd()" style="font-size:13px;">Сохранить</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-label">Логи</div>
+                <div class="setting-sub">Просмотр и публикация логов</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn" onclick="getLogs()">Скачать логи</button>
+                <button class="btn" onclick="shareLogs()">Поделиться (mclo.gs)</button>
+              </div>
+            </div>
+            <div class="setting-row" style="border-bottom:none;">
+              <div>
+                <div class="setting-label">Продлить время работы</div>
+                <div class="setting-sub">Добавить минуты до авто-остановки</div>
+              </div>
+              <div class="setting-control">
+                <input type="number" id="extend-min" value="60" min="1" max="480" style="width:80px;" />
+                <button class="btn btn-green" onclick="extendStop()" style="font-size:13px;">Продлить</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Activity bar -->
+<div class="activity-bar" id="activity-bar">
+  <div class="activity-dot"></div>
+  <span id="activity-msg">Готово</span>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+const WORKER = 'https://exatronys.danvox123hyu.workers.dev';
+const ST = {
+  0:{l:'Офлайн',cls:'sp-off',dot:'srv-dot'},
+  1:{l:'Онлайн',cls:'sp-on',dot:'srv-dot on'},
+  2:{l:'Запускается',cls:'sp-start',dot:'srv-dot starting'},
+  3:{l:'Останавливается',cls:'sp-stop',dot:'srv-dot stopping'},
+  4:{l:'Перезапуск',cls:'sp-start',dot:'srv-dot starting'},
+  5:{l:'Сохранение',cls:'sp-stop',dot:'srv-dot stopping'},
+  6:{l:'Загрузка',cls:'sp-start',dot:'srv-dot starting'},
+  7:{l:'Краш',cls:'sp-stop',dot:'srv-dot stopping'},
+};
+
+let sessionToken = localStorage.getItem('exaroton_session') || '';
+let servers = [], currentSrv = null, autoRefreshTimer = null;
+
+// ── Helpers ──────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function activity(msg) {
+  const bar = document.getElementById('activity-bar');
+  document.getElementById('activity-msg').textContent = msg;
+  bar.classList.add('visible');
+  clearTimeout(activity._t);
+  activity._t = setTimeout(() => bar.classList.remove('visible'), 3000);
+}
+
+function logLine(elId, msg, cls='log-info') {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const time = new Date().toLocaleTimeString('ru');
+  el.innerHTML += `<span class="log-time">[${time}]</span> <span class="${cls}">${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearLog() { document.getElementById('act-log').innerHTML = ''; }
+
+// ── API calls ─────────────────────────────────────────────────
+async function api(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Session-Token': sessionToken }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(WORKER + path, opts);
+  return r.json();
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+async function doLogin() {
+  const pw = document.getElementById('pw').value;
+  if (!pw) return;
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Вход...';
+  document.getElementById('login-err').textContent = '';
+
+  const r = await fetch(WORKER + '/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  }).then(r => r.json()).catch(() => ({ success: false, error: 'Ошибка сети' }));
+
+  if (r.success) {
+    sessionToken = r.token;
+    localStorage.setItem('exaroton_session', sessionToken);
+    showApp();
+  } else {
+    document.getElementById('login-err').textContent = r.error || 'Неверный пароль';
+    document.getElementById('pw').classList.add('err-input');
+    btn.disabled = false; btn.textContent = 'Войти';
+  }
+}
+
+function doLogout() {
+  sessionToken = '';
+  localStorage.removeItem('exaroton_session');
+  clearInterval(autoRefreshTimer);
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').classList.remove('out');
+  document.getElementById('pw').value = '';
+}
+
+async function checkSession() {
+  if (!sessionToken) return false;
+  const r = await fetch(WORKER + '/verify', { headers: { 'X-Session-Token': sessionToken } })
+    .then(r => r.json()).catch(() => ({ success: false }));
+  return r.success;
+}
+
+// ── Boot ──────────────────────────────────────────────────────
+async function showApp() {
+  document.getElementById('login-screen').classList.add('out');
+  document.getElementById('app').classList.add('visible');
+  await loadAccount();
+  await loadServers();
+  autoRefreshTimer = setInterval(silentRefresh, 30000);
+}
+
+async function loadAccount() {
+  const r = await api('/proxy/account');
+  if (!r.success) { doLogout(); return; }
+  const a = r.data;
+  const initials = a.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('t-avatar').textContent = initials;
+  document.getElementById('t-name').textContent = a.name;
+  document.getElementById('t-credits').textContent = Math.round(a.credits) + ' cr';
+}
+
+async function loadServers() {
+  const r = await api('/proxy/servers');
+  if (!r.success) return;
+  servers = r.data || [];
+  document.getElementById('home-sub').textContent = `${servers.length} серверов`;
+
+  // Sidebar
+  const sb = document.getElementById('sidebar-servers');
+  if (servers.length) {
+    sb.innerHTML = '<div class="sidebar-label">Серверы</div>' + servers.map((s,i) => {
+      const st = ST[s.status]||ST[0];
+      return `<button class="sidebar-item" onclick="openServer('${s.id}')">
+        <span class="${st.dot}" style="width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;"></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name}</span>
+      </button>`;
+    }).join('');
+  }
+
+  // Grid
+  const grid = document.getElementById('servers-grid');
+  if (!servers.length) {
+    grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.88.18-1a3 3 0 0 0-6 0c0 .12.11.56.18 1H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/></svg><p>Серверов нет</p></div>';
+    return;
+  }
+  grid.innerHTML = servers.map(s => {
+    const st = ST[s.status]||ST[0];
+    return `<div class="server-card" onclick="openServer('${s.id}')">
+      <div class="sc-head">
+        <div><div class="sc-name">${s.name}</div><div class="sc-addr">${s.address}</div></div>
+        <span class="status-pill ${st.cls}">
+          <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
+          ${st.l}
+        </span>
+      </div>
+      <div class="sc-metrics">
+        <div class="sc-metric"><div class="sc-metric-label">Игроки</div><div class="sc-metric-val">${s.players ? s.players.count+'/'+s.players.max : '—'}</div></div>
+        <div class="sc-metric"><div class="sc-metric-label">RAM</div><div class="sc-metric-val">${s.ram ? s.ram+'GB' : '—'}</div></div>
+        <div class="sc-metric"><div class="sc-metric-label">Версия</div><div class="sc-metric-val small">${s.software?.version || s.software?.name || '—'}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function silentRefresh() {
+  const r = await api('/proxy/servers');
+  if (!r.success) return;
+  servers = r.data || [];
+  // update status dots in sidebar
+  const items = document.querySelectorAll('#sidebar-servers .sidebar-item');
+  items.forEach((el, i) => {
+    if (!servers[i]) return;
+    const span = el.querySelector('span:first-child');
+    if (span) { const st=ST[servers[i].status]||ST[0]; span.className=st.dot; }
+  });
+  if (currentSrv) {
+    const fresh = servers.find(s=>s.id===currentSrv.id);
+    if (fresh) { currentSrv=fresh; updateDetailUI(); }
+  }
+}
+
+// ── Server detail ─────────────────────────────────────────────
+async function openServer(id) {
+  currentSrv = servers.find(s=>s.id===id);
+  if (!currentSrv) return;
+  navTo('server', null);
+  await loadServer(id);
+  loadPlayers();
+  loadPlayerLists();
+  loadFiles();
+}
+
+async function loadServer(id) {
+  const r = await api('/proxy/servers/'+id);
+  if (!r.success) return;
+  currentSrv = r.data;
+  servers = servers.map(s => s.id===id ? currentSrv : s);
+  updateDetailUI();
+}
+
+function updateDetailUI() {
+  if (!currentSrv) return;
+  const s = currentSrv;
+  document.getElementById('d-name').textContent = s.name;
+  document.getElementById('d-addr').textContent = s.address;
+  const st = ST[s.status]||ST[0];
+  const pill = document.getElementById('d-status-pill');
+  pill.className = 'status-pill ' + st.cls;
+  pill.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;margin-right:4px;"></span>${st.l}`;
+  document.getElementById('d-players').textContent = s.players ? s.players.count : '—';
+  document.getElementById('d-max-players').textContent = s.players ? 'из '+s.players.max+' слотов' : '';
+  document.getElementById('d-ram').textContent = s.ram || '—';
+  document.getElementById('d-ver').textContent = s.software?.version || '—';
+  document.getElementById('d-sw').textContent = s.software?.name || '—';
+  const on=s.status===1, off=s.status===0;
+  document.getElementById('d-start').disabled = !off;
+  document.getElementById('d-stop').disabled = !on;
+  document.getElementById('d-restart').disabled = !on;
+  if (s.ram) {
+    const sl = document.getElementById('ram-sl');
+    sl.value = s.ram;
+    updateRamSlider(sl);
+  }
+  if (s.motd) document.getElementById('motd-in').value = s.motd;
+}
+
+async function srvAct(action) {
+  if (!currentSrv) return;
+  const labels = {start:'Запуск сервера...', stop:'Остановка сервера...', restart:'Перезапуск сервера...'};
+  logLine('act-log', labels[action], 'log-info');
+  activity(labels[action]);
+  const r = await api('/proxy/servers/'+currentSrv.id+'/'+action);
+  if (r.success) {
+    logLine('act-log', 'Команда принята сервером', 'log-ok');
+    toast('Команда отправлена', 'ok');
+    setTimeout(() => loadServer(currentSrv.id), 2000);
+  } else {
+    logLine('act-log', 'Ошибка: '+(r.error||''), 'log-err');
+    toast(r.error||'Ошибка', 'err');
+  }
+}
+
+async function sendCmd() {
+  if (!currentSrv) return;
+  const inp = document.getElementById('cmd-in');
+  const cmd = inp.value.trim();
+  if (!cmd) return;
+  logLine('cmd-log', '> '+cmd, 'log-cmd');
+  inp.value = '';
+  const r = await api('/proxy/servers/'+currentSrv.id+'/command', 'POST', {command: cmd});
+  if (r.success) { logLine('cmd-log', 'Выполнено', 'log-ok'); }
+  else { logLine('cmd-log', 'Ошибка: '+(r.error||''), 'log-err'); }
+}
+
+function quickCmd(cmd) {
+  document.getElementById('cmd-in').value = cmd;
+  sendCmd();
+}
+
+async function getLogs() {
+  if (!currentSrv) return;
+  activity('Загрузка логов...');
+  const r = await api('/proxy/servers/'+currentSrv.id+'/logs');
+  if (r.success) {
+    logLine('act-log', 'Логи загружены ('+( r.data?.content?.length||0)+' байт)', 'log-ok');
+    const blob = new Blob([r.data?.content||''], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = currentSrv.name+'-latest.log'; a.click();
+    toast('Логи скачаны');
+  } else toast(r.error||'Ошибка', 'err');
+}
+
+async function shareLogs() {
+  if (!currentSrv) return;
+  activity('Публикация логов...');
+  const r = await api('/proxy/servers/'+currentSrv.id+'/logs/share');
+  if (r.success && r.data?.url) {
+    logLine('act-log', 'Логи опубликованы: '+r.data.url, 'log-ok');
+    toast('Ссылка скопирована!');
+    navigator.clipboard?.writeText(r.data.url);
+  } else toast(r.error||'Ошибка', 'err');
+}
+
+async function setRam() {
+  if (!currentSrv) return;
+  const ram = parseInt(document.getElementById('ram-sl').value);
+  activity('Изменение RAM...');
+  const r = await api('/proxy/servers/'+currentSrv.id+'/options/ram', 'POST', {ram});
+  if (r.success) { logLine('act-log', 'RAM изменён: '+ram+'GB', 'log-ok'); toast('RAM: '+ram+'GB'); await loadServer(currentSrv.id); }
+  else { toast(r.error||'Ошибка', 'err'); }
+}
+
+async function setMotd() {
+  if (!currentSrv) return;
+  const motd = document.getElementById('motd-in').value;
+  const r = await api('/proxy/servers/'+currentSrv.id+'/options/motd', 'POST', {motd});
+  if (r.success) { toast('MOTD обновлён'); logLine('act-log', 'MOTD: '+motd, 'log-ok'); }
+  else toast(r.error||'Ошибка', 'err');
+}
+
+async function extendStop() {
+  if (!currentSrv) return;
+  const duration = parseInt(document.getElementById('extend-min').value) || 60;
+  const r = await api('/proxy/servers/'+currentSrv.id+'/command', 'POST', {command: 'exaroton:extend ' + duration});
+  // try dedicated endpoint too
+  await fetch(WORKER+'/proxy/servers/'+currentSrv.id+'/stop/extended', {
+    method:'POST', headers:{'Content-Type':'application/json','X-Session-Token':sessionToken},
+    body: JSON.stringify({duration})
+  });
+  toast('Время продлено на '+duration+' мин');
+  logLine('act-log', 'Время работы продлено на '+duration+' мин', 'log-ok');
+}
+
+// ── Players ───────────────────────────────────────────────────
+async function loadPlayers() {
+  if (!currentSrv) return;
+  const el = document.getElementById('players-list');
+  const players = currentSrv.players;
+  if (!players || players.count === 0) {
+    el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>Нет игроков онлайн</p></div>';
+    return;
+  }
+  const list = players.list || [];
+  el.innerHTML = '<div class="player-list">' + (list.length ? list.map(name => `
+    <div class="player-row">
+      <div class="player-name">
+        <div class="player-avatar">${name.slice(0,2).toUpperCase()}</div>
+        ${name}
+      </div>
+      <div class="player-actions">
+        <button class="btn player-btn" onclick="quickCmd('op ${name}')">OP</button>
+        <button class="btn player-btn" onclick="quickCmd('kick ${name}')">Kick</button>
+        <button class="btn player-btn btn-red" onclick="quickCmd('ban ${name}')">Ban</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state" style="padding:1rem;"><p>Список пуст</p></div>') + '</div>';
+}
+
+async function loadPlayerLists() {
+  if (!currentSrv) return;
+  for (const [key, elId] of [['whitelist','wl-list'],['ops','ops-list'],['banned-players','banned-list']]) {
+    const r = await api('/proxy/servers/'+currentSrv.id+'/playerlists/'+key);
+    const el = document.getElementById(elId);
+    if (r.success && r.data?.entries?.length) {
+      el.innerHTML = r.data.entries.slice(0,6).map(n=>`<span style="display:inline-block;background:var(--surface2);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px;font-family:var(--mono);">${n}</span>`).join('');
+    } else el.innerHTML = '<span style="font-size:12px;color:var(--text3);">Пусто</span>';
+  }
+}
+
+async function listAction(list, action, name) {
+  if (!name.trim() || !currentSrv) return;
+  const r = await api('/proxy/servers/'+currentSrv.id+'/playerlists/'+list+'/'+name, action==='add'?'PUT':'DELETE');
+  if (r.success) { toast(name+' → '+list); loadPlayerLists(); }
+  else toast(r.error||'Ошибка', 'err');
+}
+
+// ── Files ─────────────────────────────────────────────────────
+async function loadFiles() {
+  if (!currentSrv) return;
+  const el = document.getElementById('files-list');
+  const r = await api('/proxy/servers/'+currentSrv.id+'/files/info/');
+  if (!r.success) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);">Файлы недоступны</div>'; return; }
+  const files = r.data?.files || r.data?.children || [];
+  if (!files.length) { el.innerHTML = '<div style="font-size:13px;color:var(--text3);">Нет файлов</div>'; return; }
+
+  const fileIcon = `<svg class="file-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`;
+  const folderIcon = `<svg class="file-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+
+  el.innerHTML = '<div class="file-list">'+files.map(f=>`
+    <div class="file-row">
+      ${f.isFolder || f.type==='directory' ? folderIcon : fileIcon}
+      <span class="file-name">${f.name||f.path||'—'}</span>
+      <span class="file-size">${f.size ? (f.size>1024?Math.round(f.size/1024)+'KB':f.size+'B') : ''}</span>
+    </div>`).join('')+'</div>';
+}
+
+// ── Navigation ────────────────────────────────────────────────
+function navTo(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function detailTab(name, btn) {
+  document.querySelectorAll('.dtab').forEach(el => el.style.display='none');
+  document.getElementById('dtab-'+name).style.display='block';
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ── RAM slider ────────────────────────────────────────────────
+function updateRamSlider(el) {
+  const val = el.value, min = el.min, max = el.max;
+  const pct = ((val-min)/(max-min)*100).toFixed(1)+'%';
+  el.style.setProperty('--pct', pct);
+  document.getElementById('ram-out').textContent = val + ' GB';
+}
+
+// ── Init ──────────────────────────────────────────────────────
+(async () => {
+  if (sessionToken) {
+    const valid = await checkSession();
+    if (valid) { showApp(); return; }
+    else { sessionToken=''; localStorage.removeItem('exaroton_session'); }
+  }
+})();
+</script>
+</body>
+</html>
