@@ -10,591 +10,56 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <link href="https://fonts.cdnfonts.com/css/minecraft-2" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+<!-- JSZip для скачивания папок в ZIP -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<!-- highlight.js для подсветки синтаксиса в редакторе -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<!-- marked для Markdown preview -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
-  :root {
-    --bg: #0b1220;
-    --surface: #111a2e;
-    --surface2: #19243a;
-    --border: rgba(148, 163, 184, 0.14);
-    --border2: rgba(148, 163, 184, 0.24);
-    --text: #eef2ff;
-    --text2: #b7c2d8;
-    --text3: #72809b;
-    --green: #16a34a;
-    --green-light: rgba(22, 163, 74, 0.16);
-    --green-text: #7ee09f;
-    --red: #dc2626;
-    --red-light: rgba(220, 38, 38, 0.18);
-    --red-text: #fca5a5;
-    --amber: #d97706;
-    --amber-light: rgba(217, 119, 6, 0.18);
-    --amber-text: #fdba74;
-    --radius: 16px;
-    --radius-sm: 10px;
-    --radius-xs: 6px;
-    --shadow: 0 26px 60px -24px rgba(2, 6, 23, 0.72);
-    --shadow-sm: 0 12px 30px -18px rgba(2, 6, 23, 0.9);
-    --font: 'Geist', system-ui, sans-serif;
-    --minecraft-font: 'Minecraft', 'Minecraftia', var(--mono);
-    --mono: 'Geist Mono', monospace;
-    --transition: cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html { font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
-  body { min-height: 100dvh; }
-
-  /* ── Login screen ── */
-  #login-screen {
-    min-height: 100dvh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    background: var(--bg);
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    transition: opacity .4s var(--transition), transform .4s var(--transition);
-  }
-  #login-screen.out { opacity: 0; pointer-events: none; transform: translateY(-12px); }
-
-  .login-card {
-    width: 100%;
-    max-width: 420px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 2.5rem;
-    box-shadow: var(--shadow);
-    animation: fadeUp .5s var(--transition) both;
-  }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .login-mark {
-    width: 44px; height: 44px;
-    background: var(--green);
-    border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 1.5rem;
-  }
-  .login-mark svg { width: 22px; height: 22px; fill: white; }
-  .login-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px; }
-  .login-sub { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
-
-  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-  .field label { font-size: 13px; font-weight: 500; color: var(--text2); }
-  .field input {
-    padding: 10px 14px;
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-sm);
-    font-family: var(--font);
-    font-size: 14px;
-    color: var(--text);
-    background: var(--bg);
-    transition: border-color .2s, box-shadow .2s;
-    outline: none;
-  }
-  .field input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
-  .field input.err-input { border-color: var(--red); }
-
-  .btn-primary {
-    width: 100%; padding: 11px;
-    background: var(--green); color: white;
-    border: none; border-radius: var(--radius-sm);
-    font-family: var(--font); font-size: 14px; font-weight: 500;
-    cursor: pointer; margin-top: 8px;
-    transition: background .2s, transform .1s;
-  }
-  .btn-primary:hover { background: #15803d; }
-  .btn-primary:active { transform: scale(0.98); }
-  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
-
-  .err-text { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 16px; }
-
-  /* ── App ── */
-  #app { display: none; min-height: 100dvh; }
-  #app.visible { display: block; }
-
-  .topbar {
-    position: sticky; top: 0; z-index: 50;
-    background: rgba(11,18,32,0.82);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    height: 56px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .topbar-left { display: flex; align-items: center; gap: 10px; }
-  .topbar-mark {
-    width: 28px; height: 28px;
-    background: var(--green); border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .topbar-mark svg { width: 14px; height: 14px; fill: white; }
-  .topbar-name { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-  .topbar-right { display: flex; align-items: center; gap: 12px; }
-  .acc-pill {
-    display: flex; align-items: center; gap: 7px;
-    background: var(--surface2); border-radius: 99px;
-    padding: 4px 12px 4px 4px;
-    font-size: 13px; font-weight: 500; color: var(--text2);
-    border: 1px solid var(--border);
-  }
-  .acc-avatar {
-    width: 24px; height: 24px; border-radius: 50%;
-    background: var(--green-light); color: var(--green-text);
-    font-size: 11px; font-weight: 600;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .credits-badge {
-    font-family: var(--mono); font-size: 12px;
-    color: var(--text3); padding: 0 8px;
-    border-left: 1px solid var(--border2);
-  }
-  .logout-btn {
-    padding: 6px 12px;
-    border: 1px solid var(--border2);
-    border-radius: var(--radius-xs);
-    background: transparent;
-    font-family: var(--font); font-size: 13px;
-    color: var(--text2); cursor: pointer;
-    transition: background .15s, color .15s;
-  }
-  .logout-btn:hover { background: var(--red-light); color: var(--red-text); border-color: transparent; }
-
-  /* ── Layout ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    min-height: calc(100dvh - 56px);
-    transition: grid-template-columns .28s var(--transition);
-  }
-  .layout.server-focus { grid-template-columns: 0 1fr; }
-  @media (max-width: 768px) {
-    .layout { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-  }
-
-  /* ── Sidebar ── */
-  .sidebar {
-    border-right: 1px solid var(--border);
-    padding: 1.5rem 1rem;
-    background: var(--surface);
-    display: flex; flex-direction: column; gap: 4px;
-    overflow: hidden;
-    transition: opacity .24s var(--transition), transform .24s var(--transition), padding .24s var(--transition), border-color .24s var(--transition);
-  }
-  .layout.server-focus .sidebar {
-    opacity: 0;
-    transform: translateX(-18px);
-    padding-left: 0;
-    padding-right: 0;
-    border-color: transparent;
-  }
-  .sidebar-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .06em; text-transform: uppercase; padding: 0 8px; margin: 12px 0 4px; }
-  .sidebar-item {
-    display: flex; align-items: center; gap: 9px;
-    padding: 8px 10px; border-radius: var(--radius-xs);
-    cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text2);
-    transition: background .15s, color .15s;
-    border: none; background: transparent; width: 100%; text-align: left;
-    font-family: var(--font);
-  }
-  .sidebar-item:hover { background: var(--surface2); color: var(--text); }
-  .sidebar-item.active { background: var(--green-light); color: var(--green-text); }
-  .sidebar-item svg { width: 15px; height: 15px; opacity: .7; flex-shrink: 0; }
-  .sidebar-item.active svg { opacity: 1; }
-  .srv-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
-  .srv-dot.on { background: var(--green); box-shadow: 0 0 0 2px rgba(22,163,74,.25); animation: pulse 2s infinite; }
-  .srv-dot.starting { background: var(--amber); animation: pulse 1s infinite; }
-  .srv-dot.stopping { background: var(--red); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-  /* ── Main content ── */
-  .main { padding: 2rem; overflow-y: auto; min-width: 0; }
-  .page { display: none; }
-  .page.active { display: block; animation: fadeIn .3s var(--transition); }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-
-  /* ── Page: Servers list ── */
-  .page-header { margin-bottom: 1.5rem; }
-  .page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
-  .page-sub { font-size: 14px; color: var(--text2); margin-top: 2px; }
-
-  .servers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-    margin-bottom: 2rem;
-  }
-  .server-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem;
-    box-shadow: var(--shadow-sm);
-    cursor: pointer;
-    transition: border-color .2s, box-shadow .2s, transform .2s var(--transition);
-  }
-  .server-card:hover { border-color: var(--border2); box-shadow: var(--shadow); transform: translateY(-2px); }
-  .server-card.selected { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.1); }
-  .sc-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
-  .sc-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-  .sc-addr { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-top: 1px; }
-  .status-pill {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px;
-    letter-spacing: .02em; text-transform: uppercase;
-    flex-shrink: 0;
-  }
-  .sp-on  { background: var(--green-light); color: var(--green-text); }
-  .sp-off { background: var(--surface2); color: var(--text3); }
-  .sp-start { background: var(--amber-light); color: var(--amber-text); }
-  .sp-stop  { background: var(--red-light); color: var(--red-text); }
-  .sc-metrics { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-  .sc-metric { flex: 1; }
-  .sc-metric-label { font-size: 11px; color: var(--text3); margin-bottom: 2px; }
-  .sc-metric-val { font-size: 18px; font-weight: 600; color: var(--text); font-family: var(--mono); }
-  .sc-metric-val.small { font-size: 13px; }
-
-  /* ── Page: Server detail ── */
-  .detail-header {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;
-  }
-  .detail-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .btn {
-    padding: 8px 16px; border-radius: var(--radius-xs);
-    font-family: var(--font); font-size: 13px; font-weight: 500;
-    cursor: pointer; border: 1px solid var(--border2);
-    background: var(--surface); color: var(--text);
-    transition: background .15s, transform .1s, border-color .15s;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .btn:hover { background: var(--surface2); }
-  .btn:active { transform: scale(0.98); }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn svg { width: 14px; height: 14px; }
-  .btn-green { background: var(--green); color: white; border-color: var(--green); }
-  .btn-green:hover { background: #15803d; border-color: #15803d; }
-  .btn-red { background: var(--red); color: white; border-color: var(--red); }
-  .btn-red:hover { background: #b91c1c; border-color: #b91c1c; }
-  .btn-ghost { border-color: transparent; background: transparent; }
-  .btn-ghost:hover { background: var(--surface2); border-color: var(--border); }
-
-  .bento {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 1.5rem;
-  }
-  @media (max-width: 640px) { .bento { grid-template-columns: 1fr; } }
-  .bento-wide { grid-column: 1 / -1; }
-
-  .bento-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem;
-    box-shadow: var(--shadow-sm);
-  }
-  .bento-card-title { font-size: 12px; font-weight: 600; color: var(--text3); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px; }
-  .big-num { font-size: 36px; font-weight: 600; color: var(--text); font-family: var(--mono); letter-spacing: -0.03em; }
-  .big-sub { font-size: 13px; color: var(--text3); margin-top: 2px; }
-
-  /* ── Tabs ── */
-  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; }
-  .tab {
-    padding: 8px 14px; font-size: 13px; font-weight: 500;
-    color: var(--text3); cursor: pointer;
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-    transition: color .15s, border-color .15s;
-    background: none; border-top: none; border-left: none; border-right: none;
-    font-family: var(--font);
-  }
-  .tab:hover { color: var(--text2); }
-  .tab.on { color: var(--text); border-bottom-color: var(--green); }
-
-  /* ── Section card ── */
-  .section-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 1.25rem;
-    box-shadow: var(--shadow-sm); margin-bottom: 1rem;
-  }
-
-  /* ── Log box ── */
-  .logbox {
-    background: #18181b; border-radius: var(--radius-sm);
-    padding: 12px 14px; font-family: var(--mono); font-size: 12px;
-    color: #a1a1aa; max-height: 220px; overflow-y: auto;
-    white-space: pre-wrap; word-break: break-all; line-height: 1.6;
-  }
-  .logbox .log-time { color: #52525b; }
-  .logbox .log-ok   { color: #4ade80; }
-  .logbox .log-err  { color: #f87171; }
-  .logbox .log-cmd  { color: #60a5fa; }
-  .logbox .log-info { color: #e4e4e7; }
-
-  /* ── Command input ── */
-  .cmd-row { display: flex; gap: 8px; margin-bottom: 10px; }
-  .cmd-row input {
-    flex: 1; padding: 9px 12px;
-    font-family: var(--mono); font-size: 13px;
-    border: 1px solid var(--border2); border-radius: var(--radius-xs);
-    background: var(--bg); color: var(--text); outline: none;
-    transition: border-color .2s, box-shadow .2s;
-  }
-  .cmd-row input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.1); }
-
-  /* ── Settings ── */
-  .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 16px 0; border-bottom: 1px solid var(--border); }
-  .setting-row:last-child { border-bottom: none; }
-  .setting-label { font-size: 14px; font-weight: 500; color: var(--text); }
-  .setting-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
-  .setting-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .setting-control input[type=text], .setting-control select, .setting-control textarea {
-    padding: 7px 10px; border: 1px solid var(--border2);
-    border-radius: var(--radius-xs); font-family: var(--font); font-size: 13px;
-    background: var(--bg); color: var(--text); outline: none;
-    transition: border-color .2s;
-  }
-  .setting-control input[type=text]:focus, .setting-control select:focus, .setting-control textarea:focus { border-color: var(--green); }
-  .mc-preview {
-    width: 340px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: linear-gradient(180deg, rgba(15,23,42,.92), rgba(30,41,59,.92));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
-  }
-  .mc-preview-label {
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    margin-bottom: 6px;
-  }
-  .mc-preview-body {
-    font-family: var(--minecraft-font);
-    font-size: 13px;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    word-break: break-word;
-    text-shadow: 0 1px 0 rgba(0,0,0,.45);
-  }
-  .settings-stack { display: flex; flex-direction: column; gap: 14px; }
-  .config-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    margin-bottom: 12px; flex-wrap: wrap;
-  }
-  .config-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-  }
-  .config-item {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface2);
-    padding: 12px;
-  }
-  .config-item-head {
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-    margin-bottom: 10px;
-  }
-  .config-item-label { font-size: 13px; font-weight: 600; color: var(--text); }
-  .config-item-key { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
-  .config-item-control { display: flex; gap: 8px; align-items: center; }
-  .config-item-control input[type=text],
-  .config-item-control input[type=number],
-  .config-item-control select {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border2);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font);
-    font-size: 13px;
-  }
-  .config-item-toggle {
-    width: 18px; height: 18px; accent-color: var(--green);
-  }
-  .ram-slider-wrap { display: flex; align-items: center; gap: 10px; }
-  .ram-slider-wrap input[type=range] {
-    -webkit-appearance: none; appearance: none;
-    width: 140px; height: 4px; border-radius: 2px;
-    background: linear-gradient(to right, var(--green) 0%, var(--green) var(--pct,50%), var(--border2) var(--pct,50%), var(--border2) 100%);
-    outline: none; cursor: pointer;
-  }
-  .ram-slider-wrap input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--surface); border: 2px solid var(--green);
-    cursor: pointer; box-shadow: var(--shadow-sm);
-  }
-  .ram-val { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); min-width: 36px; }
-
-  /* ── Players tab ── */
-  .player-list { display: flex; flex-direction: column; }
-  .player-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 0; border-bottom: 1px solid var(--border);
-    gap: 8px;
-  }
-  .player-row:last-child { border-bottom: none; }
-  .player-name { font-size: 14px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 8px; }
-  .player-avatar { width: 28px; height: 28px; border-radius: 6px; background: var(--surface2); display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text3); }
-  .player-actions { display: flex; gap: 4px; }
-  .player-btn { padding: 4px 10px; font-size: 12px; }
-
-  /* ── Files tab ── */
-  .files-toolbar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
-  }
-  .files-path {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    font-size: 12px; color: var(--text2);
-  }
-  .path-chip {
-    border: 1px solid var(--border2);
-    background: var(--surface2);
-    color: var(--text);
-    border-radius: 999px;
-    padding: 5px 10px;
-    font-size: 12px;
-    font-family: var(--mono);
-    cursor: pointer;
-  }
-  .path-chip:hover { background: var(--green-light); color: var(--green-text); border-color: transparent; }
-  .files-layout {
-    display: grid;
-    grid-template-columns: minmax(320px, 1.1fr) minmax(280px, .9fr);
-    gap: 14px;
-  }
-  @media (max-width: 1100px) {
-    .files-layout { grid-template-columns: 1fr; }
-  }
-  .file-list {
-    display: flex; flex-direction: column; gap: 1px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    background: var(--surface);
-  }
-  .file-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 10px; border-radius: var(--radius-xs);
-    cursor: pointer; transition: background .12s;
-  }
-  .file-row:hover { background: var(--surface2); }
-  .file-row.active { background: var(--green-light); }
-  .file-icon { width: 16px; height: 16px; color: var(--text3); flex-shrink: 0; }
-  .file-name { font-size: 13px; color: var(--text); font-family: var(--mono); }
-  .file-size { font-size: 12px; color: var(--text3); font-family: var(--mono); margin-left: auto; }
-  .file-meta {
-    font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em;
-    margin-left: 10px;
-  }
-  .file-actions {
-    display: flex; align-items: center; gap: 8px; margin-left: auto;
-  }
-  .icon-btn {
-    border: 1px solid var(--border2);
-    background: var(--surface);
-    color: var(--text2);
-    border-radius: 8px;
-    width: 30px; height: 30px;
-    display: inline-flex; align-items: center; justify-content: center;
-    cursor: pointer;
-  }
-  .icon-btn:hover { background: var(--surface2); color: var(--text); }
-  .files-preview {
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
-    overflow: hidden;
-    min-height: 420px;
-    display: flex;
-    flex-direction: column;
-  }
-  .preview-head {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-  }
-  .preview-title { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--mono); }
-  .preview-sub { font-size: 12px; color: var(--text3); }
-  .preview-body { padding: 14px; flex: 1; overflow: auto; }
-  .preview-empty { color: var(--text3); font-size: 13px; line-height: 1.6; }
-  .preview-code {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
+  /* Стили для highlight.js внутри textarea — нет, мы будем показывать preview отдельно */
+  .hljs-preview {
+    background: #0f0f12;
+    padding: 10px;
+    border-radius: 6px;
+    overflow: auto;
     font-family: var(--mono);
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.5;
+    max-height: 400px;
+    white-space: pre;
+  }
+  .md-preview {
+    padding: 14px;
+    background: var(--surface2);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
     color: var(--text);
+    max-height: 400px;
+    overflow: auto;
   }
-  .preview-image {
-    max-width: 100%;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    display: block;
-  }
-
-  /* ── Toast ── */
-  #toast-container {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 8px; z-index: 9999;
-  }
-  .toast {
-    background: var(--text); color: white;
-    padding: 10px 16px; border-radius: var(--radius-sm);
-    font-size: 13px; font-weight: 500;
-    box-shadow: 0 8px 24px rgba(0,0,0,.15);
-    animation: toastIn .3s var(--transition);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .toast.toast-err { background: var(--red); }
-  .toast.toast-ok  { background: var(--green); }
-  @keyframes toastIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-
-  /* ── Loading skeleton ── */
-  .skeleton {
-    background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: var(--radius-xs);
-  }
-  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-
-  /* ── Empty state ── */
-  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text3); }
-  .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: .3; }
-  .empty-state p { font-size: 14px; }
-
-  /* ── Activity log floating ── */
-  .activity-bar {
-    position: fixed; bottom: 0; left: 260px; right: 0;
-    background: rgba(24,24,27,.95);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(255,255,255,.08);
-    padding: 6px 1.5rem;
-    font-family: var(--mono); font-size: 12px; color: #71717a;
-    transform: translateY(100%);
-    transition: transform .3s var(--transition);
-    z-index: 40;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .activity-bar.visible { transform: translateY(0); }
-  .activity-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; flex-shrink: 0; }
-  @media(max-width:768px){ .activity-bar { left: 0; } }
+  .md-preview h1, .md-preview h2, .md-preview h3 { margin: 14px 0 8px; color: var(--text); }
+  .md-preview h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .md-preview h2 { font-size: 18px; }
+  .md-preview h3 { font-size: 15px; }
+  .md-preview p { margin: 8px 0; }
+  .md-preview ul, .md-preview ol { margin: 8px 0; padding-left: 24px; }
+  .md-preview code { background: var(--surface); padding: 2px 6px; border-radius: 3px; font-family: var(--mono); font-size: 12px; }
+  .md-preview pre { background: #0f0f12; padding: 10px; border-radius: 6px; overflow: auto; margin: 8px 0; }
+  .md-preview pre code { background: transparent; padding: 0; }
+  .md-preview a { color: var(--blue-text); text-decoration: underline; }
+  .md-preview blockquote { border-left: 3px solid var(--border2); padding-left: 12px; color: var(--text3); margin: 8px 0; }
+  .md-preview table { border-collapse: collapse; margin: 8px 0; }
+  .md-preview th, .md-preview td { border: 1px solid var(--border2); padding: 6px 10px; }
+  .md-preview img { max-width: 100%; border-radius: 6px; }
 </style>
 </head>
 <body>
 
-<!-- ══ LOGIN ══════════════════════════════════════════════════ -->
+<!-- ══ LOGIN ════════════════════════════════════════════════════ -->
 <div id="login-screen">
   <div class="login-card">
     <div class="login-mark">
@@ -604,14 +69,14 @@
     <div class="login-sub">Введите пароль для доступа</div>
     <div class="field">
       <label for="pw">Пароль</label>
-      <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+      <input type="password" id="pw" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <div class="err-text" id="login-err"></div>
-    <button class="btn-primary" id="login-btn" onclick="doLogin()">Войти</button>
+    <button class="btn-primary" id="login-btn" onclick="Auth.doLogin()">Войти</button>
   </div>
 </div>
 
-<!-- ══ APP ════════════════════════════════════════════════════ -->
+<!-- ══ APP ══════════════════════════════════════════════════════ -->
 <div id="app">
   <header class="topbar">
     <div class="topbar-left">
@@ -621,21 +86,29 @@
       <span class="topbar-name">exaroton</span>
     </div>
     <div class="topbar-right">
-      <div class="acc-pill">
+      <div class="acc-pill" onclick="App.navTo('account')" title="Профиль">
         <div class="acc-avatar" id="t-avatar">?</div>
         <span id="t-name">—</span>
       </div>
       <span class="credits-badge" id="t-credits">— cr</span>
-      <button class="logout-btn" onclick="doLogout()">Выйти</button>
+      <button class="logout-btn" onclick="Auth.doLogout()">Выйти</button>
     </div>
   </header>
 
   <div class="layout" id="app-layout">
     <!-- Sidebar -->
     <nav class="sidebar">
-      <button class="sidebar-item active" id="nav-home" onclick="navTo('home',this)">
+      <button class="sidebar-item active" id="nav-home" onclick="App.navTo('home',this)">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         Серверы
+      </button>
+      <button class="sidebar-item" id="nav-billing" onclick="App.navTo('billing',this)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+        Кредитные пулы
+      </button>
+      <button class="sidebar-item" id="nav-account" onclick="App.navTo('account',this)">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        Аккаунт
       </button>
       <div id="sidebar-servers"></div>
     </nav>
@@ -643,7 +116,7 @@
     <!-- Main -->
     <main class="main">
 
-      <!-- Page: Home / Servers list -->
+      <!-- ─── PAGE: HOME / SERVERS LIST ─────────────────────────── -->
       <div class="page active" id="page-home">
         <div class="page-header">
           <div class="page-title">Мои серверы</div>
@@ -655,31 +128,35 @@
         </div>
       </div>
 
-      <!-- Page: Server detail -->
+      <!-- ─── PAGE: SERVER DETAIL ───────────────────────────────── -->
       <div class="page" id="page-server">
         <div class="detail-header">
           <div>
-            <button class="btn btn-ghost" style="margin-bottom:8px;padding:4px 8px;font-size:12px;" onclick="navTo('home',document.getElementById('nav-home'))">
+            <button class="btn btn-ghost btn-sm" style="margin-bottom:6px;" onclick="App.navTo('home',document.getElementById('nav-home'))">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
               Все серверы
             </button>
-            <div style="font-size:22px;font-weight:600;letter-spacing:-0.02em;" id="d-name">—</div>
-            <div style="font-size:13px;color:var(--text3);font-family:var(--mono);margin-top:2px;" id="d-addr">—</div>
+            <div style="font-size:20px;font-weight:600;letter-spacing:-0.02em;" id="d-name">—</div>
+            <div style="font-size:12px;color:var(--text3);font-family:var(--mono);margin-top:2px;" id="d-addr">—</div>
+            <div style="display:none;font-size:11px;color:var(--amber-text);background:var(--amber-light);padding:2px 8px;border-radius:99px;margin-top:6px;width:fit-content;" id="d-shared">Shared сервер</div>
           </div>
-          <div class="detail-btns" id="d-btns">
-            <button class="btn btn-green" id="d-start" onclick="srvAct('start')">
+          <div class="detail-btns">
+            <button class="btn btn-green" id="d-start" onclick="Servers.act('start')">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Запустить
             </button>
-            <button class="btn btn-red" id="d-stop" onclick="srvAct('stop')">
+            <button class="btn btn-sm" id="d-start-own" onclick="Servers.startWithOwnCredits()" title="Запустить с личных кредитов">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+              Свои кредиты
+            </button>
+            <button class="btn btn-red" id="d-stop" onclick="Servers.act('stop')">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg> Остановить
             </button>
-            <button class="btn" id="d-restart" onclick="srvAct('restart')">
+            <button class="btn" id="d-restart" onclick="Servers.act('restart')">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-              Перезапустить
+              Перезапуск
             </button>
-            <button class="btn" onclick="loadServer(currentSrv.id)">
+            <button class="btn btn-ghost" onclick="Servers.loadServer(Servers.getCurrent().id)">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-              Обновить
             </button>
           </div>
         </div>
@@ -688,8 +165,8 @@
         <div class="bento">
           <div class="bento-card">
             <div class="bento-card-title">Статус</div>
-            <span class="status-pill" id="d-status-pill" style="font-size:13px;padding:5px 12px;">—</span>
-            <div class="big-sub" id="d-uptime" style="margin-top:8px;"></div>
+            <span class="status-pill" id="d-status-pill" style="font-size:12px;padding:5px 11px;">—</span>
+            <div class="big-sub" id="d-uptime" style="margin-top:6px;">Host: <span id="d-host">—</span></div>
           </div>
           <div class="bento-card">
             <div class="bento-card-title">Игроки онлайн</div>
@@ -697,108 +174,125 @@
             <div class="big-sub" id="d-max-players"></div>
           </div>
           <div class="bento-card">
-            <div class="bento-card-title">Оперативная память</div>
+            <div class="bento-card-title">RAM</div>
             <div class="big-num" id="d-ram">—</div>
             <div class="big-sub">GB выделено</div>
           </div>
           <div class="bento-card">
-            <div class="bento-card-title">Версия</div>
-            <div style="font-size:17px;font-weight:600;color:var(--text);font-family:var(--mono);margin-top:4px;" id="d-ver">—</div>
+            <div class="bento-card-title">Версия ПО</div>
+            <div style="font-size:16px;font-weight:600;color:var(--text);font-family:var(--mono);margin-top:4px;" id="d-ver">—</div>
             <div class="big-sub" id="d-sw">—</div>
           </div>
         </div>
 
+        <!-- Live stats (heap/tick/cpu) — заполняется только при WS -->
+        <div class="live-stats-row" id="live-stats-row"></div>
+
         <!-- Tabs -->
         <div class="tabs">
-          <button class="tab on" onclick="detailTab('console',this)">Консоль</button>
-          <button class="tab" onclick="detailTab('players',this)">Игроки</button>
-          <button class="tab" onclick="detailTab('files',this)">Файлы</button>
-          <button class="tab" onclick="detailTab('settings',this)">Настройки</button>
+          <button class="tab on" onclick="App.detailTab('console',this)">Консоль</button>
+          <button class="tab" onclick="App.detailTab('players',this)">Игроки</button>
+          <button class="tab" onclick="App.detailTab('files',this)">Файлы</button>
+          <button class="tab" onclick="App.detailTab('settings',this)">Настройки</button>
         </div>
 
-        <!-- Console tab -->
+        <!-- ─ Console tab ─────────────────────────────────────── -->
         <div id="dtab-console" class="dtab">
           <div class="section-card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <div>
-                <div style="font-size:13px;font-weight:500;color:var(--text2);">Журнал сервера</div>
-                <div id="console-log-meta" style="font-size:12px;color:var(--text3);margin-top:4px;">Автообновление каждые 8 секунд</div>
+            <div class="log-meta-row">
+              <div class="log-meta-left">
+                <div class="log-meta-title">Журнал сервера</div>
+                <div class="log-meta-sub" id="console-log-meta">Подключение...</div>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="refreshConsoleLog(true)">Обновить</button>
-                <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="downloadLogs()">Скачать</button>
-                <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;" onclick="shareLogs()">Поделиться</button>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span class="ws-indicator ws-off" id="ws-indicator">
+                  <span style="width:5px;height:5px;border-radius:50%;background:currentColor;display:inline-block;"></span>—
+                </span>
+                <button class="btn btn-ghost btn-sm" onclick="Console.refreshLog(true)">Обновить</button>
+                <button class="btn btn-ghost btn-sm" onclick="Console.downloadLogs()">Скачать</button>
+                <button class="btn btn-ghost btn-sm" onclick="Console.shareLogs()">Поделиться</button>
               </div>
             </div>
-            <div class="logbox" id="act-log" style="height:360px;">Загрузка журнала...</div>
+            <div class="logbox" id="act-log" style="height:340px;">Загрузка журнала...</div>
             <div style="height:14px;"></div>
-            <div style="font-size:13px;font-weight:500;color:var(--text2);margin-bottom:10px;">Отправить команду</div>
+            <div class="log-meta-title" style="margin-bottom:8px;">Отправить команду</div>
             <div class="cmd-row">
-              <input type="text" id="cmd-in" placeholder="say Hello!" onkeydown="if(event.key==='Enter')sendCmd()" />
-              <button class="btn btn-green" onclick="sendCmd()">Отправить</button>
+              <input type="text" id="cmd-in" placeholder="say Hello! (↑/↓ — история)" onkeydown="Console.handleCmdKeydown(event); if(event.key==='Enter')Console.sendCmd()" />
+              <button class="btn btn-green" onclick="Console.sendCmd()">Отправить</button>
             </div>
-            <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">Быстрые команды:</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
-              <button class="btn" style="font-size:12px;" onclick="quickCmd('save-all')">Save All</button>
-              <button class="btn" style="font-size:12px;" onclick="quickCmd('stop')">Stop</button>
-              <button class="btn" style="font-size:12px;" onclick="quickCmd('mem')">Mem</button>
+            <div class="log-meta-sub" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span>Быстрые команды (сохраняются в историю):</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-green btn-xs" onclick="Console.addCmdTemplate()" title="Добавить свой шаблон команды">+ команда</button>
+                <button class="btn btn-ghost btn-xs" onclick="if(confirm('Очистить историю команд?'))Console.clearCmdHistory()" title="Очистить историю">Очистить историю</button>
+              </div>
+            </div>
+            <div class="quick-cmds" id="user-cmd-templates">
+              <span style="font-size:11px;color:var(--text3);">Загрузка шаблонов...</span>
             </div>
           </div>
         </div>
 
-        <!-- Players tab -->
+        <!-- ─ Players tab ─────────────────────────────────────── -->
         <div id="dtab-players" class="dtab" style="display:none">
           <div class="section-card">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-              <div style="font-size:13px;font-weight:500;color:var(--text2);">Игроки онлайн</div>
-              <button class="btn" style="font-size:12px;" onclick="loadPlayers()">
-                <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px;"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            <div class="log-meta-row">
+              <div class="log-meta-title">Игроки онлайн</div>
+              <button class="btn btn-sm" onclick="Players.renderOnlinePlayers()">
+                <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                 Обновить
               </button>
             </div>
-            <div id="players-list"></div>
+            <div id="players-online-list"></div>
           </div>
-
-          <!-- Whitelist / Ops / Bans -->
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px;">
-            <div class="section-card" style="padding:1rem;">
-              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Whitelist</div>
-              <div id="wl-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
-              <div class="cmd-row" style="margin-top:8px;">
-                <input type="text" id="wl-in" placeholder="Ник игрока" style="font-size:12px;" />
-                <button class="btn btn-green" style="font-size:12px;padding:6px 10px;" onclick="listAction('whitelist','add',document.getElementById('wl-in').value)">+</button>
+          <div class="section-card">
+            <div class="log-meta-row">
+              <div>
+                <div class="log-meta-title">Списки игроков</div>
+                <div class="log-meta-sub">Whitelist, Ops, Banned-players, Banned-ips и другие</div>
               </div>
+              <button class="btn btn-sm" onclick="Players.loadAll()">Обновить</button>
             </div>
-            <div class="section-card" style="padding:1rem;">
-              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Operators</div>
-              <div id="ops-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
-              <div class="cmd-row" style="margin-top:8px;">
-                <input type="text" id="ops-in" placeholder="Ник игрока" style="font-size:12px;" />
-                <button class="btn btn-green" style="font-size:12px;padding:6px 10px;" onclick="listAction('ops','add',document.getElementById('ops-in').value)">+</button>
-              </div>
-            </div>
-            <div class="section-card" style="padding:1rem;">
-              <div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">Banned</div>
-              <div id="banned-list" style="font-size:13px;color:var(--text2);min-height:40px;"></div>
-              <div class="cmd-row" style="margin-top:8px;">
-                <input type="text" id="ban-in" placeholder="Ник игрока" style="font-size:12px;" />
-                <button class="btn btn-red" style="font-size:12px;padding:6px 10px;" onclick="listAction('banned-players','add',document.getElementById('ban-in').value)">Ban</button>
-              </div>
+            <div id="player-lists-grid">
+              <div class="empty-state" style="padding:1.5rem;"><p>Загрузка списков...</p></div>
             </div>
           </div>
         </div>
 
-        <!-- Files tab -->
+        <!-- ─ Files tab ───────────────────────────────────────── -->
         <div id="dtab-files" class="dtab" style="display:none">
           <div class="section-card">
             <div class="files-toolbar">
               <div>
-                <div style="font-size:13px;font-weight:500;color:var(--text2);">Файлы сервера</div>
+                <div class="log-meta-title">Файлы сервера</div>
                 <div class="files-path" id="files-path"></div>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn" style="font-size:12px;" onclick="loadFiles(currentFilesPath)">Обновить</button>
-                <button class="btn" style="font-size:12px;" id="download-folder-btn" onclick="downloadCurrentFolder()">Скачать всё</button>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="btn btn-sm" onclick="Files.createDirectory()">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                  Папка
+                </button>
+                <button class="btn btn-sm" onclick="Files.createFile()">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                  Файл
+                </button>
+                <button class="btn btn-sm" onclick="Files.uploadFile()">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:12px;height:12px;"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                  Загрузить
+                </button>
+                <button class="btn btn-sm" onclick="Files.load(Files.getCurrentPath())">Обновить</button>
+                <button class="btn btn-sm" id="download-folder-btn" onclick="Files.downloadCurrentFolder()">Скачать папку</button>
+              </div>
+            </div>
+            <!-- Multi-select bar (показывается только когда выбрано > 0) -->
+            <div id="files-multi-bar" class="files-multi-bar" style="display:none;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:var(--text);">Выбрано: <strong id="files-multi-count">0</strong></span>
+                <button class="btn btn-sm" onclick="Files.selectAllFiles()" title="Выбрать все">Все</button>
+                <button class="btn btn-sm" onclick="Files.clearSelection()" title="Снять выделение">Снять</button>
+                <button class="btn btn-green btn-sm" onclick="Files.downloadSelectedAsZip()" title="Скачать выбранные в ZIP">Скачать ZIP</button>
+                <button class="btn btn-red btn-sm" onclick="Files.deleteSelected()" title="Удалить выбранные">Удалить</button>
+                <span style="font-size:10px;color:var(--text3);margin-left:auto;">Ctrl+клик — добавить, Shift+клик — диапазон</span>
               </div>
             </div>
             <div class="files-layout">
@@ -807,85 +301,116 @@
                 <div class="preview-head">
                   <div>
                     <div class="preview-title" id="file-preview-title">Выбери файл</div>
-                    <div class="preview-sub" id="file-preview-sub">Текстовые файлы будут открываться прямо в панели</div>
+                    <div class="preview-sub" id="file-preview-sub">Текстовые файлы можно редактировать, конфиги — через спец. кнопку</div>
                   </div>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="btn" style="font-size:12px;" onclick="downloadCurrentFile()">Скачать</button>
-                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;" id="file-preview-actions"></div>
                 </div>
                 <div class="preview-body" id="file-preview-body">
-                  <div class="preview-empty">Открой папку или выбери файл слева. Для текстовых файлов будет доступен предпросмотр, а бинарные можно скачать.</div>
+                  <div class="preview-empty">Открой папку или выбери файл слева.</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Settings tab -->
+        <!-- ─ Settings tab ─────────────────────────────────────── -->
         <div id="dtab-settings" class="dtab" style="display:none">
           <div class="settings-stack">
-          <div class="section-card">
-            <div class="setting-row">
-              <div>
-                <div class="setting-label">Оперативная память</div>
-                <div class="setting-sub" id="ram-sub">Сервер должен быть остановлен перед изменением</div>
-              </div>
-              <div class="setting-control">
-                <div class="ram-slider-wrap">
-                  <input type="range" id="ram-sl" min="2" max="16" step="1" value="2"
-                    oninput="updateRamSlider(this)" />
-                  <span class="ram-val" id="ram-out">2 GB</span>
+            <div class="section-card">
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">Оперативная память</div>
+                  <div class="setting-sub" id="ram-sub">Сервер должен быть остановлен для изменения RAM</div>
                 </div>
-                <button class="btn btn-green" onclick="setRam()" style="font-size:13px;">Сохранить</button>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div>
-                <div class="setting-label">MOTD</div>
-                <div class="setting-sub">Описание сервера в списке и ответе на пинг</div>
-              </div>
-              <div class="setting-control" style="align-items:flex-start;flex-direction:column;">
-                <textarea id="motd-in" placeholder="A Minecraft Server" style="width:340px;min-height:86px;resize:vertical;" oninput="renderMotdPreview(this.value)"></textarea>
-                <div class="mc-preview">
-                  <div class="mc-preview-label">Предпросмотр в стиле Minecraft</div>
-                  <div id="motd-preview" class="mc-preview-body">A Minecraft Server</div>
+                <div class="setting-control">
+                  <div class="ram-slider-wrap">
+                    <input type="range" id="ram-sl" min="2" max="16" step="1" value="2"
+                      oninput="Servers.updateRamSlider(this)" />
+                    <span class="ram-val" id="ram-out">2 GB</span>
+                  </div>
+                  <button class="btn btn-green btn-sm" onclick="Servers.setRam()">Сохранить</button>
                 </div>
-                <button class="btn btn-green" onclick="setMotd()" style="font-size:13px;">Сохранить</button>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">MOTD</div>
+                  <div class="setting-sub">Описание сервера в списке и ответе на пинг</div>
+                </div>
+                <div class="setting-control" style="align-items:flex-start;flex-direction:column;flex:1;max-width:480px;">
+                  <textarea id="motd-in" placeholder="A Minecraft Server" style="width:100%;min-height:80px;resize:vertical;" oninput="Servers.renderMotdPreview(this.value)"></textarea>
+                  <div class="mc-preview" style="margin-top:8px;">
+                    <div class="mc-preview-label">Предпросмотр Minecraft</div>
+                    <div id="motd-preview" class="mc-preview-body">A Minecraft Server</div>
+                  </div>
+                  <button class="btn btn-green btn-sm" onclick="Servers.setMotd()" style="margin-top:8px;">Сохранить MOTD</button>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">Логи</div>
+                  <div class="setting-sub">Просмотр и публикация логов</div>
+                </div>
+                <div class="setting-control">
+                  <button class="btn btn-sm" onclick="Console.downloadLogs()">Скачать логи</button>
+                  <button class="btn btn-sm" onclick="Console.shareLogs()">Поделиться (mclo.gs)</button>
+                </div>
+              </div>
+              <div class="setting-row" style="border-bottom:none;">
+                <div>
+                  <div class="setting-label">Продлить время работы</div>
+                  <div class="setting-sub">Добавить минуты до авто-остановки (от 1 до 480 мин)</div>
+                </div>
+                <div class="setting-control">
+                  <input type="number" id="extend-min" value="60" min="1" max="480" style="width:80px;" />
+                  <button class="btn btn-green btn-sm" onclick="Servers.extendStop()">Продлить</button>
+                </div>
               </div>
             </div>
-            <div class="setting-row">
-              <div>
-                <div class="setting-label">Логи</div>
-                <div class="setting-sub">Просмотр и публикация логов</div>
+            <div class="section-card">
+              <div class="config-head">
+                <div>
+                  <div class="setting-label">server.properties</div>
+                  <div class="setting-sub">Ключевые настройки Minecraft (только для чтения через API конфиг-эндпоинт)</div>
+                </div>
+                <button class="btn btn-sm" onclick="Files.loadServerProperties(true)">Обновить</button>
               </div>
-              <div class="setting-control">
-                <button class="btn" onclick="downloadLogs()">Скачать логи</button>
-                <button class="btn" onclick="shareLogs()">Поделиться (mclo.gs)</button>
-              </div>
-            </div>
-            <div class="setting-row" style="border-bottom:none;">
-              <div>
-                <div class="setting-label">Продлить время работы</div>
-                <div class="setting-sub">Добавить минуты до авто-остановки</div>
-              </div>
-              <div class="setting-control">
-                <input type="number" id="extend-min" value="60" min="1" max="480" style="width:80px;" />
-                <button class="btn btn-green" onclick="extendStop()" style="font-size:13px;">Продлить</button>
+              <div id="server-config-list" class="config-grid">
+                <div class="empty-state" style="padding:1.5rem;"><p>Открой вкладку «Настройки» для загрузки server.properties</p></div>
               </div>
             </div>
           </div>
-          <div class="section-card">
-            <div class="config-head">
-              <div>
-                <div class="setting-label">server.properties</div>
-                <div class="setting-sub">Ключевые настройки Minecraft и сервера из конфигурации</div>
-              </div>
-              <button class="btn" style="font-size:12px;" onclick="loadServerConfigOptions(true)">Обновить</button>
-            </div>
-            <div id="server-config-list" class="config-grid">
-              <div class="empty-state" style="padding:1.5rem;"><p>Загрузка параметров server.properties...</p></div>
-            </div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: BILLING (Credit Pools) ─────────────────────── -->
+      <div class="page" id="page-billing">
+        <div class="page-header">
+          <div class="page-title">Кредитные пулы</div>
+          <div class="page-sub" id="pools-sub">Загрузка...</div>
+        </div>
+        <div class="pool-grid" id="pools-grid">
+          <div class="pool-card"><div class="skeleton" style="height:80px;border-radius:8px;"></div></div>
+          <div class="pool-card"><div class="skeleton" style="height:80px;border-radius:8px;"></div></div>
+        </div>
+        <div id="pool-detail" style="margin-top:1.25rem;"></div>
+      </div>
+
+      <!-- ─── PAGE: ACCOUNT ────────────────────────────────────── -->
+      <div class="page" id="page-account">
+        <div class="page-header">
+          <div class="page-title">Аккаунт</div>
+          <div class="page-sub">Профиль и информация о подключении</div>
+        </div>
+        <div id="account-content">
+          <div class="section-card"><div class="skeleton" style="height:120px;border-radius:8px;"></div></div>
+        </div>
+        <div class="section-card" style="margin-top:12px;">
+          <div class="section-card-title">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.89-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            Лог действий
           </div>
+          <div id="audit-log">
+            <div class="empty-state" style="padding:1.5rem;"><p>Лог ещё не загружен</p></div>
           </div>
         </div>
       </div>
@@ -903,921 +428,20 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<script>
-const WORKER = 'https://exatronys.danvox123hyu.workers.dev';
-const ST = {
-  0:{l:'Офлайн',cls:'sp-off',dot:'srv-dot'},
-  1:{l:'Онлайн',cls:'sp-on',dot:'srv-dot on'},
-  2:{l:'Запускается',cls:'sp-start',dot:'srv-dot starting'},
-  3:{l:'Останавливается',cls:'sp-stop',dot:'srv-dot stopping'},
-  4:{l:'Перезапуск',cls:'sp-start',dot:'srv-dot starting'},
-  5:{l:'Сохранение',cls:'sp-stop',dot:'srv-dot stopping'},
-  6:{l:'Загрузка',cls:'sp-start',dot:'srv-dot starting'},
-  7:{l:'Краш',cls:'sp-stop',dot:'srv-dot stopping'},
-};
+<!-- ─── Scripts (порядок важен — зависимости раньше) ──────────── -->
+<script src="modules/ui.js"></script>
+<script src="modules/api.js"></script>
+<script src="modules/ws.js"></script>
+<script src="modules/auth.js"></script>
+<script src="modules/account.js"></script>
+<script src="modules/servers.js"></script>
+<script src="modules/console.js"></script>
+<script src="modules/players.js"></script>
+<script src="modules/mca.js"></script>
+<script src="modules/files.js"></script>
+<script src="modules/billing.js"></script>
+<script src="modules/audit.js"></script>
+<script src="app.js"></script>
 
-let sessionToken = localStorage.getItem('exaroton_session') || '';
-let servers = [], currentSrv = null, autoRefreshTimer = null;
-let currentFilesPath = '/';
-let currentFileEntry = null;
-let currentDetailTab = 'console';
-let consoleRefreshTimer = null;
-let lastConsoleContent = '';
-let serverConfigOptions = [];
-
-// ── Helpers ──────────────────────────────────────────────────
-function toast(msg, type='ok') {
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3000);
-}
-
-function activity(msg) {
-  const bar = document.getElementById('activity-bar');
-  document.getElementById('activity-msg').textContent = msg;
-  bar.classList.add('visible');
-  clearTimeout(activity._t);
-  activity._t = setTimeout(() => bar.classList.remove('visible'), 3000);
-}
-
-function logLine(elId, msg, cls='log-info') {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  const time = new Date().toLocaleTimeString('ru');
-  el.innerHTML += `<span class="log-time">[${time}]</span> <span class="${cls}">${msg}</span>\n`;
-  el.scrollTop = el.scrollHeight;
-}
-
-function clearLog() { document.getElementById('act-log').innerHTML = ''; }
-
-function renderMotdPreview(value='') {
-  const preview = document.getElementById('motd-preview');
-  if (!preview) return;
-  preview.innerHTML = renderMinecraftText(value?.trim() ? value : 'A Minecraft Server');
-}
-
-// ── API calls ─────────────────────────────────────────────────
-async function api(path, method='GET', body=null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-Session-Token': sessionToken }
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(WORKER + path, opts);
-  return r.json();
-}
-
-async function apiRaw(path, options={}) {
-  const headers = new Headers(options.headers || {});
-  if (!headers.has('X-Session-Token')) headers.set('X-Session-Token', sessionToken);
-  const r = await fetch(WORKER + path, { ...options, headers });
-  return r;
-}
-
-function escapeHtml(value='') {
-  return String(value).replace(/[&<>"']/g, ch => ({
-    '&':'&amp;',
-    '<':'&lt;',
-    '>':'&gt;',
-    '"':'&quot;',
-    "'":'&#39;'
-  }[ch]));
-}
-
-function renderMinecraftText(value='') {
-  const colorMap = {
-    '0':'#000000','1':'#0000aa','2':'#00aa00','3':'#00aaaa','4':'#ff5555','5':'#aa00aa',
-    '6':'#ffaa00','7':'#aaaaaa','8':'#555555','9':'#5555ff','a':'#55ff55','b':'#55ffff',
-    'c':'#ff5555','d':'#ff55ff','e':'#ffff55','f':'#ffffff'
-  };
-  const normalized = String(value || '').replace(/&([0-9a-frlomnk])/gi, '\u00A7$1');
-  let html = '';
-  let buffer = '';
-  let state = { color: '#ffffff', bold: false, italic: false, underline: false, strike: false };
-
-  const flush = () => {
-    if (!buffer) return;
-    const decoration = [state.underline ? 'underline' : '', state.strike ? 'line-through' : ''].filter(Boolean).join(' ') || 'none';
-    html += `<span style="color:${state.color};font-weight:${state.bold ? 700 : 400};font-style:${state.italic ? 'italic' : 'normal'};text-decoration:${decoration};">${escapeHtml(buffer)}</span>`;
-    buffer = '';
-  };
-
-  for (let i = 0; i < normalized.length; i += 1) {
-    const char = normalized[i];
-    const code = normalized[i + 1]?.toLowerCase();
-    if (char === '\u00A7' && code) {
-      flush();
-      if (colorMap[code]) state = { color: colorMap[code], bold: false, italic: false, underline: false, strike: false };
-      else if (code === 'l') state.bold = true;
-      else if (code === 'o') state.italic = true;
-      else if (code === 'n') state.underline = true;
-      else if (code === 'm') state.strike = true;
-      else if (code === 'r') state = { color: '#ffffff', bold: false, italic: false, underline: false, strike: false };
-      i += 1;
-      continue;
-    }
-    if (char === '\n') {
-      flush();
-      html += '<br />';
-      continue;
-    }
-    buffer += char;
-  }
-
-  flush();
-  return html || 'A Minecraft Server';
-}
-
-function stripAnsi(text='') {
-  return String(text).replace(/\u001b\[[0-9;]*m/g, '');
-}
-
-function renderLogContent(content='') {
-  return stripAnsi(content)
-    .split('\n')
-    .map(line => renderMinecraftText(line))
-    .join('<br />');
-}
-
-function configOptionId(key='') {
-  return `cfg-${String(key).replace(/[^a-z0-9_-]/gi, '_')}`;
-}
-
-function configOptionValue(option) {
-  const el = document.getElementById(configOptionId(option.key));
-  if (!el) return option.value;
-  if (option.type === 'boolean') return !!el.checked;
-  if (option.type === 'integer') return Number(el.value || 0);
-  return el.value;
-}
-
-function mergeServerRuntimeFields(nextServers=[]) {
-  const runtimeById = new Map(
-    [...servers, currentSrv].filter(Boolean).map(server => [server.id, server])
-  );
-  return nextServers.map(server => {
-    const runtime = runtimeById.get(server.id);
-    return runtime ? { ...runtime, ...server, ram: server.ram ?? runtime.ram, motd: server.motd ?? runtime.motd } : server;
-  });
-}
-
-function normalizeServerPath(path='/') {
-  if (!path || path === '/') return '/';
-  const clean = String(path).replace(/\\/g, '/').replace(/\/+/g, '/');
-  return clean.startsWith('/') ? clean : '/' + clean;
-}
-
-function parentServerPath(path='/') {
-  const normalized = normalizeServerPath(path);
-  if (normalized === '/') return '/';
-  const parts = normalized.split('/').filter(Boolean);
-  parts.pop();
-  return parts.length ? '/' + parts.join('/') : '/';
-}
-
-function fileApiPath(kind, path='/') {
-  const normalized = normalizeServerPath(path);
-  if (normalized === '/') return `/proxy/servers/${currentSrv.id}/files/${kind}//`;
-  return `/proxy/servers/${currentSrv.id}/files/${kind}${normalized}/`;
-}
-
-function formatBytes(size) {
-  if (!Number.isFinite(size) || size < 0) return '';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function isPreviewableFile(entry) {
-  if (!entry || entry.isDirectory) return false;
-  const name = (entry.name || '').toLowerCase();
-  if (entry.isTextFile || entry.isConfigFile || entry.isLog) return true;
-  return /\.(txt|log|json|yml|yaml|properties|cfg|conf|ini|toml|xml|md|csv|mcmeta|java|js|ts|html|css|sh|bat)$/i.test(name);
-}
-
-function isImageFile(entry) {
-  const name = (entry?.name || '').toLowerCase();
-  return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
-}
-
-// ── Auth ──────────────────────────────────────────────────────
-async function doLogin() {
-  const pw = document.getElementById('pw').value;
-  if (!pw) return;
-  const btn = document.getElementById('login-btn');
-  btn.disabled = true; btn.textContent = 'Вход...';
-  document.getElementById('login-err').textContent = '';
-
-  const r = await fetch(WORKER + '/auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pw })
-  }).then(r => r.json()).catch(() => ({ success: false, error: 'Ошибка сети' }));
-
-  if (r.success) {
-    sessionToken = r.token;
-    localStorage.setItem('exaroton_session', sessionToken);
-    showApp();
-  } else {
-    document.getElementById('login-err').textContent = r.error || 'Неверный пароль';
-    document.getElementById('pw').classList.add('err-input');
-    btn.disabled = false; btn.textContent = 'Войти';
-  }
-}
-
-function doLogout() {
-  sessionToken = '';
-  localStorage.removeItem('exaroton_session');
-  clearInterval(autoRefreshTimer);
-  stopConsoleRefresh();
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('login-screen').classList.remove('out');
-  document.getElementById('pw').value = '';
-}
-
-async function checkSession() {
-  if (!sessionToken) return false;
-  const r = await fetch(WORKER + '/verify', { headers: { 'X-Session-Token': sessionToken } })
-    .then(r => r.json()).catch(() => ({ success: false }));
-  return r.success;
-}
-
-// ── Boot ──────────────────────────────────────────────────────
-async function showApp() {
-  document.getElementById('login-screen').classList.add('out');
-  document.getElementById('app').classList.add('visible');
-  await loadAccount();
-  await loadServers();
-  autoRefreshTimer = setInterval(silentRefresh, 30000);
-}
-
-async function loadAccount() {
-  const r = await api('/proxy/account');
-  if (!r.success) { doLogout(); return; }
-  const a = r.data;
-  const initials = a.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  document.getElementById('t-avatar').textContent = initials;
-  document.getElementById('t-name').textContent = a.name;
-  document.getElementById('t-credits').textContent = Math.round(a.credits) + ' cr';
-}
-
-async function loadServers() {
-  const r = await api('/proxy/servers');
-  if (!r.success) return;
-  servers = mergeServerRuntimeFields(r.data || []);
-  document.getElementById('home-sub').textContent = `${servers.length} серверов`;
-
-  // Sidebar
-  const sb = document.getElementById('sidebar-servers');
-  if (servers.length) {
-    sb.innerHTML = '<div class="sidebar-label">Серверы</div>' + servers.map((s,i) => {
-      const st = ST[s.status]||ST[0];
-      return `<button class="sidebar-item" onclick="openServer('${s.id}')">
-        <span class="${st.dot}" style="width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;"></span>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name}</span>
-      </button>`;
-    }).join('');
-  }
-
-  // Grid
-  const grid = document.getElementById('servers-grid');
-  if (!servers.length) {
-    grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.88.18-1a3 3 0 0 0-6 0c0 .12.11.56.18 1H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/></svg><p>Серверов нет</p></div>';
-    return;
-  }
-  grid.innerHTML = servers.map(s => {
-    const st = ST[s.status]||ST[0];
-    return `<div class="server-card" onclick="openServer('${s.id}')">
-      <div class="sc-head">
-        <div><div class="sc-name">${s.name}</div><div class="sc-addr">${s.address}</div></div>
-        <span class="status-pill ${st.cls}">
-          <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>
-          ${st.l}
-        </span>
-      </div>
-      <div class="sc-metrics">
-        <div class="sc-metric"><div class="sc-metric-label">Игроки</div><div class="sc-metric-val">${s.players ? s.players.count+'/'+s.players.max : '—'}</div></div>
-        <div class="sc-metric"><div class="sc-metric-label">RAM</div><div class="sc-metric-val">${s.ram ? s.ram+'GB' : '—'}</div></div>
-        <div class="sc-metric"><div class="sc-metric-label">Версия</div><div class="sc-metric-val small">${s.software?.version || s.software?.name || '—'}</div></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function silentRefresh() {
-  const r = await api('/proxy/servers');
-  if (!r.success) return;
-  servers = mergeServerRuntimeFields(r.data || []);
-  // update status dots in sidebar
-  const items = document.querySelectorAll('#sidebar-servers .sidebar-item');
-  items.forEach((el, i) => {
-    if (!servers[i]) return;
-    const span = el.querySelector('span:first-child');
-    if (span) { const st=ST[servers[i].status]||ST[0]; span.className=st.dot; }
-  });
-  if (currentSrv) {
-    const fresh = servers.find(s=>s.id===currentSrv.id);
-    if (fresh) { currentSrv=fresh; updateDetailUI(); }
-  }
-}
-
-// ── Server detail ─────────────────────────────────────────────
-function setLayoutFocus(isServerPage) {
-  const layout = document.getElementById('app-layout');
-  if (!layout) return;
-  layout.classList.toggle('server-focus', !!isServerPage && window.innerWidth > 768);
-}
-
-async function openServer(id) {
-  currentSrv = servers.find(s=>s.id===id);
-  if (!currentSrv) return;
-  navTo('server', null);
-  await loadServer(id);
-  currentDetailTab = 'console';
-  document.querySelectorAll('.tab').forEach(el => el.classList.remove('on'));
-  document.querySelector('.tab')?.classList.add('on');
-  document.querySelectorAll('.dtab').forEach((el, idx) => el.style.display = idx === 0 ? 'block' : 'none');
-  refreshConsoleLog();
-  startConsoleRefresh();
-  loadServerConfigOptions();
-  loadPlayers();
-  loadPlayerLists();
-  loadFiles();
-}
-
-async function loadServer(id) {
-  const r = await api('/proxy/servers/'+id);
-  if (!r.success) return;
-  currentSrv = r.data;
-  servers = servers.map(s => s.id===id ? currentSrv : s);
-  await loadRuntimeSettings();
-  updateDetailUI();
-}
-
-function updateDetailUI() {
-  if (!currentSrv) return;
-  const s = currentSrv;
-  document.getElementById('d-name').textContent = s.name;
-  document.getElementById('d-addr').textContent = s.address;
-  const st = ST[s.status]||ST[0];
-  const pill = document.getElementById('d-status-pill');
-  pill.className = 'status-pill ' + st.cls;
-  pill.innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;margin-right:4px;"></span>${st.l}`;
-  document.getElementById('d-players').textContent = s.players ? s.players.count : '—';
-  document.getElementById('d-max-players').textContent = s.players ? 'из '+s.players.max+' слотов' : '';
-  document.getElementById('d-ram').textContent = s.ram || '—';
-  document.getElementById('d-ver').textContent = s.software?.version || '—';
-  document.getElementById('d-sw').textContent = s.software?.name || '—';
-  const on=s.status===1, off=s.status===0;
-  document.getElementById('d-start').disabled = !off;
-  document.getElementById('d-stop').disabled = !on;
-  document.getElementById('d-restart').disabled = !on;
-  if (s.ram) {
-    const sl = document.getElementById('ram-sl');
-    sl.max = Math.max(16, Number(s.ram) || 16);
-    sl.value = s.ram;
-    updateRamSlider(sl);
-  }
-  if (typeof s.motd === 'string') {
-    document.getElementById('motd-in').value = s.motd;
-    renderMotdPreview(s.motd);
-  }
-  document.getElementById('ram-sub').textContent = s.status === 0
-    ? 'Сервер остановлен: RAM можно менять'
-    : 'Для изменения RAM сначала останови сервер';
-}
-
-async function loadRuntimeSettings() {
-  if (!currentSrv) return;
-  const [ramResp, motdResp] = await Promise.all([
-    api('/proxy/servers/'+currentSrv.id+'/options/ram'),
-    api('/proxy/servers/'+currentSrv.id+'/options/motd')
-  ]);
-
-  if (ramResp?.success && Number.isFinite(Number(ramResp.data?.ram))) {
-    currentSrv.ram = Number(ramResp.data.ram);
-  }
-
-  if (motdResp?.success && typeof motdResp.data?.motd === 'string') {
-    currentSrv.motd = motdResp.data.motd;
-  }
-}
-
-function renderServerConfigOptions() {
-  const el = document.getElementById('server-config-list');
-  if (!el) return;
-  if (!serverConfigOptions.length) {
-    el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>Параметры server.properties пока недоступны.</p></div>';
-    return;
-  }
-
-  const preferredOrder = [
-    'max-players', 'gamemode', 'difficulty', 'white-list', 'online-mode', 'allow-flight',
-    'force-gamemode', 'spawn-protection', 'view-distance', 'simulation-distance',
-    'level-name', 'level-seed', 'level-type', 'generate-structures', 'hardcore',
-    'resource-pack', 'resource-pack-prompt', 'pause-when-empty-seconds'
-  ];
-
-  const ordered = serverConfigOptions.slice().sort((a, b) => {
-    const ai = preferredOrder.indexOf(a.key);
-    const bi = preferredOrder.indexOf(b.key);
-    if (ai === -1 && bi === -1) return a.label.localeCompare(b.label, 'ru');
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
-
-  const featured = ordered.filter(opt => preferredOrder.includes(opt.key));
-
-  el.innerHTML = featured.map(option => {
-    const id = configOptionId(option.key);
-    let control = '';
-    if (option.type === 'boolean') {
-      control = `<input id="${id}" class="config-item-toggle" type="checkbox" ${option.value ? 'checked' : ''} />`;
-    } else if (option.type === 'select' && Array.isArray(option.options)) {
-      control = `<select id="${id}">${option.options.map(value => `<option value="${escapeHtml(value)}" ${value === option.value ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('')}</select>`;
-    } else if (option.type === 'integer') {
-      control = `<input id="${id}" type="number" value="${escapeHtml(option.value ?? 0)}" />`;
-    } else {
-      control = `<input id="${id}" type="text" value="${escapeHtml(option.value ?? '')}" />`;
-    }
-
-    return `
-      <div class="config-item">
-        <div class="config-item-head">
-          <div>
-            <div class="config-item-label">${escapeHtml(option.label)}</div>
-            <div class="config-item-key">${escapeHtml(option.key)}</div>
-          </div>
-          <button class="btn btn-green" style="font-size:12px;padding:6px 10px;" onclick="saveServerConfigOption('${option.key}')">Сохранить</button>
-        </div>
-        <div class="config-item-control">${control}</div>
-      </div>`;
-  }).join('');
-}
-
-async function loadServerConfigOptions(showToast=false) {
-  if (!currentSrv) return;
-  const el = document.getElementById('server-config-list');
-  if (el) el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>Загрузка параметров server.properties...</p></div>';
-  const r = await api('/proxy/servers/'+currentSrv.id+'/files/config/server.properties/');
-  if (!r.success) {
-    if (el) el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>Не удалось загрузить server.properties.</p></div>';
-    if (showToast) toast(r.error || 'Не удалось загрузить server.properties', 'err');
-    return;
-  }
-  serverConfigOptions = r.data || [];
-  renderServerConfigOptions();
-  if (showToast) toast('server.properties обновлён');
-}
-
-async function saveServerConfigOption(key) {
-  if (!currentSrv) return;
-  const option = serverConfigOptions.find(item => item.key === key);
-  if (!option) return;
-  const value = configOptionValue(option);
-  const r = await api('/proxy/servers/'+currentSrv.id+'/files/config/server.properties/', 'POST', { [key]: value });
-  if (!r.success) {
-    toast(r.error || `Не удалось сохранить ${key}`, 'err');
-    return;
-  }
-  option.value = value;
-  toast(`${option.label} сохранён`);
-  await loadServer(currentSrv.id);
-}
-
-function stopConsoleRefresh() {
-  clearInterval(consoleRefreshTimer);
-  consoleRefreshTimer = null;
-}
-
-function startConsoleRefresh() {
-  stopConsoleRefresh();
-  if (!currentSrv || currentDetailTab !== 'console') return;
-  consoleRefreshTimer = setInterval(() => {
-    if (currentSrv && currentDetailTab === 'console') refreshConsoleLog();
-  }, 8000);
-}
-
-async function refreshConsoleLog(showToast=false) {
-  if (!currentSrv) return;
-  const metaEl = document.getElementById('console-log-meta');
-  const logEl = document.getElementById('act-log');
-  if (metaEl) metaEl.textContent = 'Обновление журнала...';
-
-  const r = await api('/proxy/servers/'+currentSrv.id+'/logs');
-  if (!r.success) {
-    if (metaEl) metaEl.textContent = 'Не удалось загрузить журнал';
-    if (showToast) toast(r.error || 'Не удалось обновить журнал', 'err');
-    return;
-  }
-
-  const content = r.data?.content || '';
-  lastConsoleContent = content;
-  if (logEl) {
-    const previousTop = logEl.scrollTop;
-    logEl.innerHTML = content ? renderLogContent(content) : 'Лог пока пуст.';
-    logEl.scrollTop = previousTop;
-  }
-  if (metaEl) {
-    metaEl.textContent = `Последнее обновление: ${new Date().toLocaleTimeString('ru-RU')}`;
-  }
-  if (showToast) toast('Журнал обновлён');
-}
-
-async function srvAct(action) {
-  if (!currentSrv) return;
-  const labels = {start:'Запуск сервера...', stop:'Остановка сервера...', restart:'Перезапуск сервера...'};
-  activity(labels[action]);
-  const r = await api('/proxy/servers/'+currentSrv.id+'/'+action);
-  if (r.success) {
-    toast('Команда отправлена', 'ok');
-    setTimeout(async () => {
-      await loadServer(currentSrv.id);
-      refreshConsoleLog();
-    }, 2000);
-  } else {
-    toast(r.error||'Ошибка', 'err');
-  }
-}
-
-async function sendCmd() {
-  if (!currentSrv) return;
-  const inp = document.getElementById('cmd-in');
-  const cmd = inp.value.trim();
-  if (!cmd) return;
-  logLine('cmd-log', '> '+cmd, 'log-cmd');
-  inp.value = '';
-  const r = await api('/proxy/servers/'+currentSrv.id+'/command', 'POST', {command: cmd});
-  if (r.success) {
-    logLine('cmd-log', 'Выполнено', 'log-ok');
-    setTimeout(() => refreshConsoleLog(), 800);
-  }
-  else { logLine('cmd-log', 'Ошибка: '+(r.error||''), 'log-err'); }
-}
-
-function quickCmd(cmd) {
-  document.getElementById('cmd-in').value = cmd;
-  sendCmd();
-}
-
-async function downloadLogs() {
-  if (!currentSrv) return;
-  activity('Загрузка логов...');
-  const r = await api('/proxy/servers/'+currentSrv.id+'/logs');
-  if (r.success) {
-    const blob = new Blob([r.data?.content||''], {type:'text/plain'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = currentSrv.name+'-latest.log'; a.click();
-    toast('Логи скачаны');
-  } else toast(r.error||'Ошибка', 'err');
-}
-
-async function shareLogs() {
-  if (!currentSrv) return;
-  activity('Публикация логов...');
-  const r = await api('/proxy/servers/'+currentSrv.id+'/logs/share');
-  if (r.success && r.data?.url) {
-    toast('Ссылка скопирована!');
-    navigator.clipboard?.writeText(r.data.url);
-  } else toast(r.error||'Ошибка', 'err');
-}
-
-async function setRam() {
-  if (!currentSrv) return;
-  if (currentSrv.status !== 0) {
-    toast('Сначала останови сервер, потом меняй RAM', 'err');
-    return;
-  }
-  const ram = parseInt(document.getElementById('ram-sl').value);
-  activity('Изменение RAM...');
-  const r = await api('/proxy/servers/'+currentSrv.id+'/options/ram', 'POST', {ram});
-  if (r.success) {
-    currentSrv.ram = ram;
-    updateDetailUI();
-    toast('RAM: '+ram+'GB');
-    await loadServer(currentSrv.id);
-  }
-  else { toast(r.error||'Ошибка', 'err'); }
-}
-
-async function setMotd() {
-  if (!currentSrv) return;
-  const motd = document.getElementById('motd-in').value;
-  const r = await api('/proxy/servers/'+currentSrv.id+'/options/motd', 'POST', {motd});
-  if (r.success) {
-    currentSrv.motd = motd;
-    renderMotdPreview(motd);
-    updateDetailUI();
-    toast('MOTD обновлён');
-  }
-  else toast(r.error||'Ошибка', 'err');
-}
-
-async function extendStop() {
-  if (!currentSrv) return;
-  const duration = parseInt(document.getElementById('extend-min').value) || 60;
-  const r = await api('/proxy/servers/'+currentSrv.id+'/command', 'POST', {command: 'exaroton:extend ' + duration});
-  // try dedicated endpoint too
-  await fetch(WORKER+'/proxy/servers/'+currentSrv.id+'/stop/extended', {
-    method:'POST', headers:{'Content-Type':'application/json','X-Session-Token':sessionToken},
-    body: JSON.stringify({duration})
-  });
-  toast('Время продлено на '+duration+' мин');
-}
-
-// ── Players ───────────────────────────────────────────────────
-async function loadPlayers() {
-  if (!currentSrv) return;
-  const el = document.getElementById('players-list');
-  const players = currentSrv.players;
-  if (!players || players.count === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>Нет игроков онлайн</p></div>';
-    return;
-  }
-  const list = players.list || [];
-  el.innerHTML = '<div class="player-list">' + (list.length ? list.map(name => `
-    <div class="player-row">
-      <div class="player-name">
-        <div class="player-avatar">${name.slice(0,2).toUpperCase()}</div>
-        ${name}
-      </div>
-      <div class="player-actions">
-        <button class="btn player-btn" onclick="quickCmd('op ${name}')">OP</button>
-        <button class="btn player-btn" onclick="quickCmd('kick ${name}')">Kick</button>
-        <button class="btn player-btn btn-red" onclick="quickCmd('ban ${name}')">Ban</button>
-      </div>
-    </div>`).join('') : '<div class="empty-state" style="padding:1rem;"><p>Список пуст</p></div>') + '</div>';
-}
-
-async function loadPlayerLists() {
-  if (!currentSrv) return;
-  for (const [key, elId] of [['whitelist','wl-list'],['ops','ops-list'],['banned-players','banned-list']]) {
-    const r = await api('/proxy/servers/'+currentSrv.id+'/playerlists/'+key);
-    const el = document.getElementById(elId);
-    if (r.success && r.data?.entries?.length) {
-      el.innerHTML = r.data.entries.slice(0,6).map(n=>`<span style="display:inline-block;background:var(--surface2);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px;font-family:var(--mono);">${n}</span>`).join('');
-    } else el.innerHTML = '<span style="font-size:12px;color:var(--text3);">Пусто</span>';
-  }
-}
-
-async function listAction(list, action, name) {
-  if (!name.trim() || !currentSrv) return;
-  const r = await api('/proxy/servers/'+currentSrv.id+'/playerlists/'+list+'/'+name, action==='add'?'PUT':'DELETE');
-  if (r.success) { toast(name+' → '+list); loadPlayerLists(); }
-  else toast(r.error||'Ошибка', 'err');
-}
-
-// ── Files ─────────────────────────────────────────────────────
-function renderFilesPath() {
-  const el = document.getElementById('files-path');
-  if (!el) return;
-  const parts = normalizeServerPath(currentFilesPath).split('/').filter(Boolean);
-  let walk = '';
-  const crumbs = ['<button class="path-chip" onclick="loadFiles(\'/\')">root</button>'];
-  for (const part of parts) {
-    walk += '/' + part;
-    crumbs.push(`<button class="path-chip" onclick="loadFiles('${walk.replace(/'/g, "\\'")}')">${escapeHtml(part)}</button>`);
-  }
-  el.innerHTML = crumbs.join('<span>/</span>');
-  updateDownloadFolderButton();
-}
-
-function updateFileSelectionUI(path='') {
-  document.querySelectorAll('#files-list .file-row').forEach(row => {
-    row.classList.toggle('active', row.dataset.path === path);
-  });
-}
-
-function updateDownloadFolderButton() {
-  const btn = document.getElementById('download-folder-btn');
-  if (!btn) return;
-  const normalized = normalizeServerPath(currentFilesPath);
-  if (normalized === '/') {
-    btn.textContent = 'Скачать всё';
-    return;
-  }
-  const parts = normalized.split('/').filter(Boolean);
-  const currentName = parts[parts.length - 1] || 'папку';
-  btn.textContent = `Скачать папку: ${currentName}`;
-}
-
-function setFilePreview(entry=null, content='', kind='empty') {
-  currentFileEntry = entry;
-  updateFileSelectionUI(entry?.path || '');
-  const titleEl = document.getElementById('file-preview-title');
-  const subEl = document.getElementById('file-preview-sub');
-  const bodyEl = document.getElementById('file-preview-body');
-  if (!titleEl || !subEl || !bodyEl) return;
-
-  if (!entry) {
-    titleEl.textContent = 'Выбери файл';
-    subEl.textContent = 'Текстовые файлы будут открываться прямо в панели';
-    bodyEl.innerHTML = '<div class="preview-empty">Открой папку или выбери файл слева. Для текстовых файлов будет доступен предпросмотр, а бинарные можно скачать.</div>';
-    return;
-  }
-
-  titleEl.textContent = entry.path || entry.name || 'Файл';
-  subEl.textContent = `${entry.isDirectory ? 'Папка' : 'Файл'}${entry.size ? ' • ' + formatBytes(entry.size) : ''}`;
-
-  if (kind === 'text') {
-    bodyEl.innerHTML = `<pre class="preview-code">${escapeHtml(content)}</pre>`;
-    return;
-  }
-
-  if (kind === 'image') {
-    bodyEl.innerHTML = `<img class="preview-image" src="${content}" alt="${escapeHtml(entry.name || 'image')}" />`;
-    return;
-  }
-
-  if (kind === 'directory') {
-    bodyEl.innerHTML = '<div class="preview-empty">Это папка. Выше отображается её содержимое.</div>';
-    return;
-  }
-
-  bodyEl.innerHTML = '<div class="preview-empty">Предпросмотр для этого файла недоступен. Его можно скачать кнопкой выше.</div>';
-}
-
-async function openFileEntry(encodedPath) {
-  if (!currentSrv) return;
-  const path = decodeURIComponent(encodedPath);
-  const infoResp = await api(fileApiPath('info', path));
-  if (!infoResp.success || !infoResp.data) {
-    toast(infoResp.error || 'Не удалось открыть файл', 'err');
-    return;
-  }
-
-  const entry = infoResp.data;
-  if (entry.isDirectory) {
-    await loadFiles(entry.path || path);
-    return;
-  }
-
-  currentFileEntry = entry;
-
-  if (isPreviewableFile(entry)) {
-    const resp = await apiRaw(fileApiPath('data', entry.path));
-    if (!resp.ok) {
-      toast('Не удалось загрузить содержимое файла', 'err');
-      setFilePreview(entry, '', 'binary');
-      return;
-    }
-    setFilePreview(entry, await resp.text(), 'text');
-    return;
-  }
-
-  if (isImageFile(entry)) {
-    const resp = await apiRaw(fileApiPath('data', entry.path));
-    if (!resp.ok) {
-      toast('Не удалось загрузить изображение', 'err');
-      setFilePreview(entry, '', 'binary');
-      return;
-    }
-    setFilePreview(entry, URL.createObjectURL(await resp.blob()), 'image');
-    return;
-  }
-
-  setFilePreview(entry, '', 'binary');
-}
-
-async function downloadCurrentFile() {
-  if (!currentFileEntry) {
-    toast('Сначала выбери файл или папку', 'err');
-    return;
-  }
-  const resp = await apiRaw(fileApiPath('data', currentFileEntry.path));
-  if (!resp.ok) {
-    toast('Скачать файл не удалось', 'err');
-    return;
-  }
-  const blob = await resp.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = currentFileEntry.name || (currentFileEntry.isDirectory ? 'folder.zip' : 'download');
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function downloadSpecificFile(encodedPath) {
-  const path = decodeURIComponent(encodedPath);
-  const infoResp = await api(fileApiPath('info', path));
-  if (!infoResp.success || !infoResp.data || infoResp.data.isDirectory) {
-    toast('Файл недоступен для скачивания', 'err');
-    return;
-  }
-  currentFileEntry = infoResp.data;
-  await downloadCurrentFile();
-}
-
-function goFilesUp() {
-  loadFiles(parentServerPath(currentFilesPath));
-}
-
-async function downloadCurrentFolder() {
-  const targetPath = normalizeServerPath(currentFilesPath);
-  const infoResp = await api(fileApiPath('info', targetPath));
-  if (!infoResp.success || !infoResp.data) {
-    toast('Папка недоступна для скачивания', 'err');
-    return;
-  }
-  currentFileEntry = infoResp.data;
-  await downloadCurrentFile();
-}
-
-async function loadFiles(path='/') {
-  if (!currentSrv) return;
-  currentFilesPath = normalizeServerPath(path);
-  renderFilesPath();
-
-  const el = document.getElementById('files-list');
-  const r = await api(fileApiPath('info', currentFilesPath));
-  if (!r.success || !r.data) {
-    el.innerHTML = '<div style="font-size:13px;color:var(--text3);">Файлы недоступны</div>';
-    setFilePreview();
-    return;
-  }
-
-  const base = r.data;
-  const files = (base.children || base.files || []).slice().sort((a, b) => {
-    const aDir = !!a.isDirectory;
-    const bDir = !!b.isDirectory;
-    if (aDir !== bDir) return aDir ? -1 : 1;
-    return (a.name || '').localeCompare(b.name || '', 'ru', { sensitivity: 'base' });
-  });
-
-  if (!files.length) {
-    el.innerHTML = '<div class="empty-state" style="padding:1.5rem;"><p>В этой папке пока нет файлов</p></div>';
-    setFilePreview(base, '', 'directory');
-    return;
-  }
-
-  const fileIcon = `<svg class="file-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>`;
-  const folderIcon = `<svg class="file-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
-  const downloadIcon = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:14px;height:14px;"><path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V2h2z"/></svg>`;
-
-  el.innerHTML = '<div class="file-list">' + files.map(f => `
-    <div class="file-row${currentFileEntry?.path === f.path ? ' active' : ''}" data-path="${escapeHtml(f.path || '')}" onclick="openFileEntry('${encodeURIComponent(f.path || '')}')" ondblclick="openFileEntry('${encodeURIComponent(f.path || '')}')">
-      ${f.isDirectory ? folderIcon : fileIcon}
-      <span class="file-name">${escapeHtml(f.name || f.path || '—')}</span>
-      <span class="file-meta">${f.isDirectory ? 'folder' : (isPreviewableFile(f) ? 'text' : 'file')}</span>
-      <div class="file-actions">
-        <span class="file-size">${formatBytes(f.size)}</span>
-        ${f.isDirectory ? '' : `<button class="icon-btn" onclick="event.stopPropagation(); downloadSpecificFile('${encodeURIComponent(f.path || '')}')">${downloadIcon}</button>`}
-      </div>
-    </div>`).join('') + '</div>';
-
-  setFilePreview(base, '', 'directory');
-}
-
-// ── Navigation ────────────────────────────────────────────────
-function navTo(page, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  if (page !== 'server') stopConsoleRefresh();
-  setLayoutFocus(page === 'server');
-}
-
-function detailTab(name, btn) {
-  currentDetailTab = name;
-  document.querySelectorAll('.dtab').forEach(el => el.style.display='none');
-  document.getElementById('dtab-'+name).style.display='block';
-  document.querySelectorAll('.tab').forEach(el => el.classList.remove('on'));
-  btn.classList.add('on');
-  if (name === 'console') {
-    refreshConsoleLog();
-    startConsoleRefresh();
-  } else {
-    stopConsoleRefresh();
-  }
-}
-
-// ── RAM slider ────────────────────────────────────────────────
-function updateRamSlider(el) {
-  const val = el.value, min = el.min, max = el.max;
-  const pct = ((val-min)/(max-min)*100).toFixed(1)+'%';
-  el.style.setProperty('--pct', pct);
-  document.getElementById('ram-out').textContent = val + ' GB';
-}
-
-window.addEventListener('resize', () => {
-  const serverVisible = document.getElementById('page-server')?.classList.contains('active');
-  setLayoutFocus(serverVisible);
-});
-
-// ── Init ──────────────────────────────────────────────────────
-(async () => {
-  if (sessionToken) {
-    const valid = await checkSession();
-    if (valid) { showApp(); return; }
-    else { sessionToken=''; localStorage.removeItem('exaroton_session'); }
-  }
-})();
-</script>
 </body>
 </html>
