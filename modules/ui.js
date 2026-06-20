@@ -8,7 +8,9 @@
   'use strict';
 
   // ── Toast ────────────────────────────────────────────────────────
-  function toast(msg, type = 'ok', duration = 3000) {
+  // Ошибки показываем дольше (5 сек) — пользователь успеет прочитать.
+  function toast(msg, type = 'ok', duration = null) {
+    if (duration == null) duration = type === 'err' ? 5000 : 3000;
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
     el.textContent = String(msg);
@@ -34,6 +36,13 @@
     return String(value).replace(/[&<>"']/g, ch => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
+  }
+
+  // ── Encode a string for safe embedding inside a JS string literal
+  //    within an HTML attribute (onclick="...('${X}')").
+  //    encodeURIComponent covers most chars but NOT ' — replace it too.
+  function encodeForJsAttr(value = '') {
+    return encodeURIComponent(String(value)).replace(/'/g, '%27');
   }
 
   // ── Format bytes ─────────────────────────────────────────────────
@@ -118,6 +127,7 @@
   }
 
   // ── Modal dialog (promise-based) ─────────────────────────────────
+  // Закрывается по: клику на overlay, клику на action-кнопку, нажатию Escape.
   function showModal({ title, sub = '', bodyHtml = '', actions = [{ label: 'OK', value: true, primary: true }] }) {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -132,16 +142,36 @@
           </div>
         </div>`;
       document.body.appendChild(overlay);
+
+      let resolved = false;
+      const cleanup = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          resolve(null);
+        }
+      };
+      document.addEventListener('keydown', onKey);
+
       overlay.querySelectorAll('button[data-i]').forEach(btn => {
         btn.addEventListener('click', () => {
+          if (resolved) return;
+          resolved = true;
           const i = Number(btn.dataset.i);
-          overlay.remove();
+          cleanup();
           resolve(actions[i].value);
         });
       });
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
-          overlay.remove();
+          if (resolved) return;
+          resolved = true;
+          cleanup();
           resolve(null);
         }
       });
@@ -167,7 +197,20 @@
       const input = overlay.querySelector('#modal-input');
       input.focus();
       input.select();
-      const close = (value) => { overlay.remove(); resolve(value); };
+
+      let resolved = false;
+      const close = (value) => {
+        if (resolved) return;
+        resolved = true;
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve(value);
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape') close(null);
+      };
+      document.addEventListener('keydown', onKey);
+
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') close(input.value);
         if (e.key === 'Escape') close(null);
@@ -206,7 +249,7 @@
 
   // ── Export ───────────────────────────────────────────────────────
   global.UI = {
-    toast, activity, escapeHtml, formatBytes, formatDuration, formatRelativeTime,
+    toast, activity, escapeHtml, encodeForJsAttr, formatBytes, formatDuration, formatRelativeTime,
     renderMinecraftText, stripAnsi, renderLogContent,
     showModal, promptModal, confirmModal,
     initials, debounce,

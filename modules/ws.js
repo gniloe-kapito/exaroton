@@ -24,8 +24,26 @@
   const RECONNECT_INTERVAL = 3000;     // 3 секунды между попытками
   const STREAM_RETRY_INTERVAL = 15000; // 15 секунд на retry старта стримов
 
+  // Статусы сервера exaroton (см. openapi.yaml ServerStatus)
+  const STATUS_OFFLINE = 0;
+  const STATUS_ONLINE = 1;
+  const STATUS_STARTING = 2;
+  const STATUS_STOPPING = 3;
+  const STATUS_RESTARTING = 4;
+
+  // Какие статусы нужны каждому стриму (как в официальной библиотеке):
+  // console — ONLINE/STARTING/STOPPING/RESTARTING (можно смотреть консоль при запуске/остановке)
+  // heap/stats/tick — только ONLINE
+  // status/management — всегда (не требуют проверки статуса)
+  const STREAM_START_STATUSES = {
+    console: [STATUS_ONLINE, STATUS_STARTING, STATUS_STOPPING, STATUS_RESTARTING],
+    heap: [STATUS_ONLINE],
+    stats: [STATUS_ONLINE],
+    tick: [STATUS_ONLINE],
+  };
+
   class ExarotonWS {
-    constructor(serverId) {
+    constructor(serverId, initialStatus = null) {
       this.serverId = serverId;
       this.url = API.PATHS.wsServer(serverId);
 
@@ -35,6 +53,7 @@
       this.serverConnected = false;
       this.reconnectTimer = null;
       this.streamRetryTimer = null;
+      this.streamRestartTimer = null;
 
       // Подписанные стримы (name → true|{startData})
       this.subscribedStreams = new Map();
@@ -45,8 +64,9 @@
       // Callbacks: { open, close, ready, status, consoleLine, heap, stats, tick, management }
       this.handlers = {};
 
-      // Последний статус сервера (из status-стрима)
-      this.lastStatus = null;
+      // Последний статус сервера. Берём из Servers.getCurrent() при создании,
+      // обновляется при каждом status-event от WS.
+      this.lastStatus = (initialStatus != null) ? initialStatus : (global.Servers?.getCurrent()?.status ?? null);
     }
 
     // ── Управление подписками ─────────────────────────────────────
@@ -108,8 +128,10 @@
       this.shouldConnect = false;
       clearTimeout(this.reconnectTimer);
       clearInterval(this.streamRetryTimer);
+      clearTimeout(this.streamRestartTimer);
       this.reconnectTimer = null;
       this.streamRetryTimer = null;
+      this.streamRestartTimer = null;
       this.subscribedStreams.clear();
       this.startedStreams.clear();
       if (this.ws) {
@@ -143,12 +165,19 @@
           this.serverConnected = false;
           this._emit('disconnected');
           // Попробуем перезапустить стримы через RECONNECT_INTERVAL
-          setTimeout(() => this._tryStartAllStreams(), RECONNECT_INTERVAL);
+          clearTimeout(this.streamRestartTimer);
+          this.streamRestartTimer = setTimeout(() => {
+            this.streamRestartTimer = null;
+            this._tryStartAllStreams();
+          }, RECONNECT_INTERVAL);
           return;
         case 'status':
           if (msg.stream === 'status') {
             this.lastStatus = msg.data;
             this._emit('status', msg.data);
+            // Статус сервера изменился — перепроверим стримы
+            // (например, при переходе OFFLINE → ONLINE надо стартовать heap/stats/tick)
+            this._tryStartAllStreams();
             return;
           }
           // fall through для status-стримов
@@ -219,6 +248,8 @@
       for (const [name] of this.subscribedStreams) {
         this._tryStartStream(name);
       }
+      // Заодно остановим те, что больше не должны работать
+      this._tryStopAllStreams();
     }
 
     _tryStartStream(name) {
@@ -226,7 +257,24 @@
       if (!this.ready) return;
       const startData = this.subscribedStreams.get(name);
       if (startData === undefined) return;
+      // Проверим, разрешён ли текущий статус сервера для этого стрима
+      const allowedStatuses = STREAM_START_STATUSES[name];
+      if (allowedStatuses && this.lastStatus != null && !allowedStatuses.includes(this.lastStatus)) {
+        // Статус не подходит (например, heap требует ONLINE, а сервер OFFLINE) — пропускаем
+        return;
+      }
       this._send({ stream: name, type: 'start', data: startData });
+    }
+
+    // Остановить стримы, которые больше не должны работать при текущем статусе
+    _tryStopAllStreams() {
+      for (const name of this.startedStreams) {
+        const allowedStatuses = STREAM_START_STATUSES[name];
+        if (allowedStatuses && this.lastStatus != null && !allowedStatuses.includes(this.lastStatus)) {
+          this._send({ stream: name, type: 'stop' });
+          // server сам пришлёт 'stopped', тогда уберём из startedStreams
+        }
+      }
     }
 
     // ── Отправка команды в консоль (через console stream) ─────────

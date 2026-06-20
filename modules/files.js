@@ -28,6 +28,9 @@
     configOptions = [];
     configPath = null;
     selectedPaths.clear();
+    // Сбрасываем превью-панель, чтобы редактор файла не оставался висеть
+    // от предыдущего сервера.
+    setFilePreview();
     loadFiles('/');
   }
 
@@ -144,30 +147,40 @@
       UI.toast('JSZip не загружен', 'err');
       return;
     }
-    UI.activity(`Сбор ${selectedPaths.size} элементов...`);
+    const directMode = API.isDirectMode();
+    UI.activity(`Сбор ${selectedPaths.size} элементов ${directMode ? '(прямой режим)' : ''}...`);
     const zip = new JSZip();
-    let fileCount = 0, errorCount = 0;
+    let fileCount = 0, folderCount = 0, errorCount = 0, totalBytes = 0;
 
-    // Рекурсивное скачивание файла или папки
+    const fetchInfo = (path) => directMode
+      ? API.directApi(API.DIRECT_PATHS.fileInfo(srv.id, path))
+      : API.api(API.PATHS.fileInfo(srv.id, path));
+    const fetchData = (path) => directMode
+      ? API.directApiRaw(API.DIRECT_PATHS.fileData(srv.id, path))
+      : API.apiRaw(API.PATHS.fileData(srv.id, path));
+
     async function addEntryToZip(path, zipFolder) {
-      const infoResp = await API.api(API.PATHS.fileInfo(srv.id, path));
+      const infoResp = await fetchInfo(path);
       if (!infoResp.success || !infoResp.data) { errorCount += 1; return; }
       const entry = infoResp.data;
       const name = entry.name || path.split('/').pop() || 'item';
       if (!entry.isDirectory) {
         try {
-          const resp = await API.apiRaw(API.PATHS.fileData(srv.id, entry.path));
+          const resp = await fetchData(path);
           if (!resp.ok) { errorCount += 1; return; }
           const blob = await resp.blob();
+          totalBytes += blob.size;
           zipFolder.file(name, blob);
           fileCount += 1;
-          UI.activity(`Скачано: ${fileCount}...`);
+          UI.activity(`Скачано: ${fileCount} файлов, ${folderCount} папок, ${UI.formatBytes(totalBytes)}...`);
         } catch { errorCount += 1; }
       } else {
         const subZip = zipFolder.folder(name);
+        folderCount += 1;
         const children = entry.children || entry.files || [];
         for (const child of children) {
-          await addEntryToZip(child.path, subZip);
+          const childPath = API.joinPath(path, child.name);
+          await addEntryToZip(childPath, subZip);
         }
       }
     }
@@ -176,23 +189,22 @@
       await addEntryToZip(path, zip);
     }
 
-    if (fileCount === 0) {
+    if (fileCount === 0 && folderCount === 0) {
       UI.toast('Ничего не удалось скачать', 'err');
       return;
     }
-    UI.activity(`Упаковка ZIP (${fileCount} файлов)...`);
+    UI.activity(`Упаковка ZIP (${fileCount} файлов, ${UI.formatBytes(totalBytes)})...`);
     const zipBlob = await zip.generateAsync({
       type: 'blob',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 },
+      compression: 'STORE',
     });
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `selected-${fileCount}-files.zip`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    UI.toast(`ZIP готов: ${fileCount} файлов${errorCount ? `, ошибок: ${errorCount}` : ''}`, 'ok', 5000);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    UI.toast(`ZIP готов: ${fileCount} файлов, ${folderCount} папок, ${UI.formatBytes(totalBytes)}${errorCount ? `, ошибок: ${errorCount}` : ''}`, 'ok', 7000);
   }
 
   // ── Навигация ───────────────────────────────────────────────────
@@ -285,12 +297,6 @@
       crumbs.push(`<button class="path-chip" onclick="Files.load('${walk.replace(/'/g, "\\'")}')">${UI.escapeHtml(part)}</button>`);
     }
     el.innerHTML = crumbs.join('<span style="color:var(--text3)">/</span>');
-  }
-
-  function updateFileSelectionUI(path = '') {
-    document.querySelectorAll('#files-list .file-row').forEach(row => {
-      row.classList.toggle('active', row.dataset.path === path);
-    });
   }
 
   // ── Открытие файла/папки ────────────────────────────────────────
@@ -648,15 +654,23 @@
       await downloadFolderAsZip(currentEntry);
       return;
     }
-    const resp = await API.apiRaw(API.PATHS.fileData(srv.id, currentEntry.path));
-    if (!resp.ok) { UI.toast('Скачать не удалось', 'err'); return; }
+    // Прямой режим если есть directToken, иначе через Worker
+    const resp = API.isDirectMode()
+      ? await API.directApiRaw(API.DIRECT_PATHS.fileData(srv.id, currentEntry.path))
+      : await API.apiRaw(API.PATHS.fileData(srv.id, currentEntry.path));
+    if (!resp.ok) {
+      let err = 'Скачать не удалось';
+      try { const j = await resp.json(); err = j.error || err; } catch {}
+      UI.toast(err, 'err');
+      return;
+    }
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = currentEntry.name || 'download';
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
     UI.toast('Скачано');
   }
 
@@ -692,6 +706,15 @@
   //   2. Для каждого файла — GET /files/data/{path}/ → Blob
   //   3. Добавляем в ZIP с относительным путём
   //   4. Генерируем ZIP blob → триггерим скачивание
+  //   ВАЖНО: exaroton может возвращать child.path как относительный (только имя)
+  //   или как абсолютный (родительский путь + имя). Поэтому всегда строим
+  //   полный путь сами: parentPath + '/' + child.name. Это надёжнее.
+  //
+  //   РЕЖИМЫ ЗАГРУЗКИ:
+  //   - Через Cloudflare Worker (по умолчанию) — лимит ~100 MB на ответ
+  //   - Прямой режим (если в Account установлен Direct exaroton token) —
+  //     фронт качает напрямую с api.exaroton.com, минуя Worker. Без лимита.
+  //     НЕБЕЗОПАСНО: токен виден в DevTools.
   async function downloadFolderAsZip(folderEntry) {
     const srv = Servers.getCurrent();
     if (!srv || !folderEntry) return;
@@ -699,33 +722,55 @@
       UI.toast('JSZip не загружен. Проверьте подключение CDN.', 'err');
       return;
     }
-    UI.activity('Сбор содержимого папки...');
+    const directMode = API.isDirectMode();
+    UI.activity(`Сбор содержимого папки ${directMode ? '(прямой режим)' : ''}...`);
     const zip = new JSZip();
     const rootName = folderEntry.name || 'folder';
     let fileCount = 0;
+    let folderCount = 0;
     let errorCount = 0;
+    let totalBytes = 0;
+
+    // Хелперы для запросов — выбирают прямой режим или через Worker
+    const fetchInfo = (path) => directMode
+      ? API.directApi(API.DIRECT_PATHS.fileInfo(srv.id, path))
+      : API.api(API.PATHS.fileInfo(srv.id, path));
+    const fetchData = (path) => directMode
+      ? API.directApiRaw(API.DIRECT_PATHS.fileData(srv.id, path))
+      : API.apiRaw(API.PATHS.fileData(srv.id, path));
 
     // Рекурсивный обход
-    async function walk(entry, zipFolder) {
-      const infoResp = await API.api(API.PATHS.fileInfo(srv.id, entry.path));
+    // entryPath — абсолютный путь в файловой системе сервера (например "/world/plugins")
+    // zipFolder — соответствующая папка в ZIP
+    async function walk(entryPath, zipFolder) {
+      const infoResp = await fetchInfo(entryPath);
       if (!infoResp.success || !infoResp.data) {
+        console.warn('[zip] fileInfo failed for', entryPath, infoResp);
         errorCount += 1;
         return;
       }
       const children = infoResp.data.children || infoResp.data.files || [];
       for (const child of children) {
+        const childPath = API.joinPath(entryPath, child.name);
         if (child.isDirectory) {
           const subZip = zipFolder.folder(child.name);
-          await walk(child, subZip);
+          folderCount += 1;
+          await walk(childPath, subZip);
         } else {
           try {
-            const resp = await API.apiRaw(API.PATHS.fileData(srv.id, child.path));
-            if (!resp.ok) { errorCount += 1; continue; }
+            const resp = await fetchData(childPath);
+            if (!resp.ok) {
+              console.warn('[zip] fileData failed for', childPath, resp.status);
+              errorCount += 1;
+              continue;
+            }
             const blob = await resp.blob();
+            totalBytes += blob.size;
             zipFolder.file(child.name, blob);
             fileCount += 1;
-            UI.activity(`Скачано файлов: ${fileCount}...`);
-          } catch {
+            UI.activity(`Скачано: ${fileCount} файлов, ${folderCount} папок, ${UI.formatBytes(totalBytes)}...`);
+          } catch (e) {
+            console.warn('[zip] fileData exception for', childPath, e);
             errorCount += 1;
           }
         }
@@ -733,24 +778,26 @@
     }
 
     try {
-      await walk(folderEntry, zip);
-      if (fileCount === 0) {
+      const rootPath = API.normalizePath(folderEntry.path || '/');
+      await walk(rootPath, zip);
+      if (fileCount === 0 && folderCount === 0) {
         UI.toast('Папка пуста или все файлы недоступны', 'warn');
         return;
       }
-      UI.activity(`Упаковка ZIP (${fileCount} файлов)...`);
+      UI.activity(`Упаковка ZIP (${fileCount} файлов, ${UI.formatBytes(totalBytes)})...`);
+      // БЕЗ compression — это критично для больших миров.
+      // DEFLATE в JSZip жрал память и валил вкладку на 200+ МБ.
       const zipBlob = await zip.generateAsync({
         type: 'blob',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 6 },
+        compression: 'STORE',  // без сжатия, просто упаковка
       });
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${rootName}.zip`;
       a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      UI.toast(`ZIP готов: ${fileCount} файлов${errorCount ? `, ошибок: ${errorCount}` : ''}`, 'ok', 5000);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      UI.toast(`ZIP готов: ${fileCount} файлов, ${folderCount} папок, ${UI.formatBytes(totalBytes)}${errorCount ? `, ошибок: ${errorCount}` : ''}`, 'ok', 7000);
     } catch (e) {
       UI.toast('Ошибка упаковки ZIP: ' + (e.message || e), 'err');
     }
@@ -768,6 +815,10 @@
       okLabel: 'Создать',
     });
     if (!name) return;
+    if (!isValidFileName(name)) {
+      UI.toast('Имя не должно содержать / \\ или быть пустым', 'err');
+      return;
+    }
     const newPath = API.joinPath(currentPath, name);
     UI.activity('Создание папки...');
     const resp = await API.apiRaw(API.PATHS.fileData(srv.id, newPath), {
@@ -878,6 +929,10 @@
       okLabel: 'Создать',
     });
     if (!name) return;
+    if (!isValidFileName(name)) {
+      UI.toast('Имя не должно содержать / \\ или быть пустым', 'err');
+      return;
+    }
     const newPath = API.joinPath(currentPath, name);
     UI.activity('Создание файла...');
     const resp = await API.apiRaw(API.PATHS.fileData(srv.id, newPath), {
@@ -900,6 +955,16 @@
       try { const j = await resp.json(); err = j.error || err; } catch {}
       UI.toast(err, 'err');
     }
+  }
+
+  // ── Валидация имени файла/папки ─────────────────────────────────
+  // Запрещаем / и \\ (они разбирают путь), а также пустые имена.
+  function isValidFileName(name) {
+    if (!name || typeof name !== 'string') return false;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === '.' || trimmed === '..') return false;
+    if (/[\/\\]/.test(trimmed)) return false;
+    return true;
   }
 
   // ── Удаление файла/папки ────────────────────────────────────────
@@ -1714,6 +1779,7 @@
 
       // Tooltip + click
       const handleMove = (e) => {
+        if (!Files._mapState) return; // модалка закрыта
         const rect = canvas.getBoundingClientRect();
         const scaleX = 512 / rect.width;
         const scaleY = 512 / rect.height;
@@ -1727,12 +1793,22 @@
         const block = d.top?.block || 'minecraft:air';
         const y = d.top?.y ?? '—';
         tooltip.style.display = 'block';
-        tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-        tooltip.style.top = (e.clientY - rect.top + 10) + 'px';
-        tooltip.innerHTML = `${block}<br/>X=${worldBX} Z=${worldBZ}<br/>Y=${y}`;
+        tooltip.innerHTML = `${UI.escapeHtml(block)}<br/>X=${worldBX} Z=${worldBZ}<br/>Y=${y}`;
+        // Ограничиваем позицию tooltip внутри canvas-обёртки, чтобы не убегал
+        const tw = tooltip.offsetWidth;
+        const th = tooltip.offsetHeight;
+        let left = e.clientX - rect.left + 10;
+        let top = e.clientY - rect.top + 10;
+        const maxLeft = rect.width - tw - 4;
+        const maxTop = rect.height - th - 4;
+        if (left > maxLeft) left = Math.max(0, maxLeft);
+        if (top > maxTop) top = Math.max(0, maxTop);
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
       };
 
       const handleClick = (e) => {
+        if (!Files._mapState) return; // модалка закрыта
         const rect = canvas.getBoundingClientRect();
         const scaleX = 512 / rect.width;
         const scaleY = 512 / rect.height;
@@ -1760,7 +1836,7 @@
     if (!canvas) return;
     const state = global.Files._mapState;
     const chunks = global.Files._mapChunks;
-    if (!chunks) return;
+    if (!chunks || !state) return;
 
     // Считаем значения из контролов
     const maxyEl = document.getElementById('map-maxy');
@@ -1773,11 +1849,16 @@
     const info = document.getElementById('region-map-info');
     if (info) info.innerHTML = `<span style="color:var(--text3);">Отрисовка: режим=${state.mode}${state.mode === 'slice' ? ', Y=' + state.sliceY : ', до Y=' + state.maxY}...</span>`;
 
+    // Токен отмены: если модалку закрыли во время рендера — рендер прерывается.
+    const isCancelled = () => !global.Files._mapState;
+
     try {
       if (state.mode === 'slice') {
         await MCA.renderSlice(canvas, chunks, state.sliceY, {
           showGrid: state.showGrid,
+          isCancelled,
           onProgress: (done, total) => {
+            if (isCancelled()) return;
             UI.activity(`Срез Y=${state.sliceY}: ${done}/${total} чанков...`);
           },
         });
@@ -1789,10 +1870,13 @@
         await MCA.renderMap(canvas, chunks, {
           showGrid: state.showGrid,
           maxY: state.maxY,
+          isCancelled,
           onProgress: (done, total) => {
+            if (isCancelled()) return;
             UI.activity(`Поверхность: ${done}/${total} чанков...`);
           },
           onChunk: (chunk) => {
+            if (isCancelled()) return;
             if (!chunk || !chunk.sections) return;
             for (let bz = 0; bz < 16; bz++) {
               for (let bx = 0; bx < 16; bx++) {
@@ -1807,6 +1891,8 @@
           },
         });
 
+        if (isCancelled()) return; // модалку закрыли — не трогаем info
+
         // Покажем статистику
         const topBlocks = Array.from(blockCounter.entries())
           .sort((a, b) => b[1] - a[1])
@@ -1815,8 +1901,9 @@
           .join(', ') || '—';
         if (info) info.innerHTML = `Поверхность (до Y=${state.maxY}): найдено <strong style="color:var(--text);">${foundTopBlocks}</strong> блоков из ${totalColumns}. Топ: ${topBlocks}`;
       }
-      UI.activity('Карта готова');
+      if (!isCancelled()) UI.activity('Карта готова');
     } catch (e) {
+      if (isCancelled()) return; // не логируем ошибки отменённого рендера
       UI.toast('Ошибка отрисовки: ' + (e.message || e), 'err');
       if (info) info.innerHTML = `<span style="color:var(--red-text);">Ошибка: ${UI.escapeHtml(e.message || String(e))}</span>`;
     }

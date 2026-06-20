@@ -39,6 +39,68 @@
     else localStorage.removeItem('exaroton_session');
   }
 
+  // ── Direct exaroton token (для прямого скачивания в обход Worker) ──
+  // Если установлен — фронт качает файлы напрямую с api.exaroton.com,
+  // минуя Cloudflare Worker (обход лимита 100 MB на ответ).
+  // НЕБЕЗОПАСНО: токен виден в DevTools. Только для личного использования!
+  const EXAROTON_API_BASE = 'https://api.exaroton.com/v1';
+
+  function getDirectToken() {
+    return localStorage.getItem('exaroton_direct_token') || '';
+  }
+  function setDirectToken(token) {
+    if (token) localStorage.setItem('exaroton_direct_token', token);
+    else localStorage.removeItem('exaroton_direct_token');
+  }
+
+  // Прямой запрос к exaroton API (минуя Worker). Только если есть directToken.
+  async function directApi(path, options = {}) {
+    const token = getDirectToken();
+    if (!token) {
+      return { success: false, error: 'Direct token не установлен. Открой Account → Direct exaroton token.' };
+    }
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${token}`);
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    try {
+      const r = await fetch(EXAROTON_API_BASE + path, { ...options, headers });
+      return await r.json();
+    } catch (e) {
+      return { success: false, error: `Сеть: ${e.message || e}` };
+    }
+  }
+
+  // Прямой binary-запрос (для скачивания файлов минуя Worker).
+  // Возвращает Response (можно .blob() / .arrayBuffer()).
+  async function directApiRaw(path, options = {}) {
+    const token = getDirectToken();
+    if (!token) {
+      return new Response(JSON.stringify({ success: false, error: 'Direct token не установлен' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${token}`);
+    if (!headers.has('Accept')) headers.set('Accept', '*/*');
+    try {
+      return await fetch(EXAROTON_API_BASE + path, { ...options, headers });
+    } catch (e) {
+      return new Response(JSON.stringify({ success: false, error: String(e) }), {
+        status: 0, headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  // Прямые пути к exaroton API (для directApi/directApiRaw)
+  const DIRECT_PATHS = {
+    fileInfo: (id, path) => `/servers/${id}/files/info/${normalizePath(path)}/`,
+    fileData: (id, path) => `/servers/${id}/files/data/${normalizePath(path)}/`,
+  };
+
+  function isDirectMode() {
+    return !!getDirectToken();
+  }
+
   // ── api() — JSON-запрос ──────────────────────────────────────────
   async function api(path, method = 'GET', body = null) {
     const opts = {
@@ -50,7 +112,7 @@
       const r = await fetch(WORKER + path, opts);
       return await r.json();
     } catch (e) {
-      return { success: false, error: `Сеть: ${e.message || e}` };
+      return { success: false, error: friendlyNetworkError(e) };
     }
   }
 
@@ -61,10 +123,23 @@
     try {
       return await fetch(WORKER + path, { ...options, headers });
     } catch (e) {
-      return new Response(JSON.stringify({ success: false, error: String(e) }), {
+      const msg = friendlyNetworkError(e);
+      return new Response(JSON.stringify({ success: false, error: msg }), {
         status: 0, headers: { 'Content-Type': 'application/json' }
       });
     }
+  }
+
+  // Человеко-читаемое объяснение сетевых ошибок fetch.
+  function friendlyNetworkError(e) {
+    const msg = (e && (e.message || String(e))) || '';
+    if (/Failed to fetch|NetworkError|load failed/i.test(msg)) {
+      return 'Нет соединения с сервером (Worker недоступен или нет интернета)';
+    }
+    if (/CORS|cross-origin/i.test(msg)) {
+      return 'CORS-ошибка: Worker не разрешает запрос с этого домена';
+    }
+    return `Сеть: ${msg || 'неизвестная ошибка'}`;
   }
 
   // ── Path helpers ─────────────────────────────────────────────────
@@ -162,5 +237,8 @@
     normalizePath, parentPath, joinPath,
     PLAYER_LIST_LABELS, playerListLabel,
     isPreviewableFile, isImageFile, isConfigFile,
+    // Прямой режим (минуя Cloudflare Worker)
+    getDirectToken, setDirectToken, isDirectMode,
+    directApi, directApiRaw, DIRECT_PATHS,
   };
 })(window);

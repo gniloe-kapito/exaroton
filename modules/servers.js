@@ -108,13 +108,13 @@
           </div>
         </div>
         <div class="sc-actions">
-          <button class="btn btn-green btn-sm" ${!isOffline ? 'disabled' : ''} onclick="event.stopPropagation(); Servers.act('start','${s.id}')">
+          <button class="btn btn-green btn-sm" ${!isOffline ? 'disabled' : ''} title="Запустить" aria-label="Запустить" onclick="event.stopPropagation(); Servers.act('start','${s.id}')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
-          <button class="btn btn-red btn-sm" ${!isOnline ? 'disabled' : ''} onclick="event.stopPropagation(); Servers.act('stop','${s.id}')">
+          <button class="btn btn-red btn-sm" ${!isOnline ? 'disabled' : ''} title="Остановить" aria-label="Остановить" onclick="event.stopPropagation(); Servers.act('stop','${s.id}')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
           </button>
-          <button class="btn btn-sm" ${!isOnline ? 'disabled' : ''} onclick="event.stopPropagation(); Servers.act('restart','${s.id}')">
+          <button class="btn btn-sm" ${!isOnline ? 'disabled' : ''} title="Перезапустить" aria-label="Перезапустить" onclick="event.stopPropagation(); Servers.act('restart','${s.id}')">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
           </button>
         </div>
@@ -308,25 +308,44 @@
     };
     UI.activity(labels[action] || action);
 
+    // Дизейблим детальные кнопки на время запроса
+    const isDetail = !serverId || (currentSrv && currentSrv.id === serverId);
+    const detailBtnIds = ['d-start', 'd-stop', 'd-restart', 'd-start-own'];
+    const detailBtns = isDetail
+      ? detailBtnIds.map(id => document.getElementById(id)).filter(Boolean)
+      : [];
+    detailBtns.forEach(b => { b.disabled = true; });
+
     let r;
-    if (action === 'start') {
-      // POST /start/ с {useOwnCredits} если useOwnCredits=true
-      // GET /start/ в обычном случае (общие кредиты)
-      if (opts.useOwnCredits) {
-        r = await API.api(API.PATHS.serverStart(srv.id), 'POST', { useOwnCredits: true });
+    try {
+      if (action === 'start') {
+        // POST /start/ с {useOwnCredits} если useOwnCredits=true
+        // GET /start/ в обычном случае (общие кредиты)
+        if (opts.useOwnCredits) {
+          r = await API.api(API.PATHS.serverStart(srv.id), 'POST', { useOwnCredits: true });
+        } else {
+          r = await API.api(API.PATHS.serverStart(srv.id));
+        }
+      } else if (action === 'stop') {
+        r = await API.api(API.PATHS.serverStop(srv.id));
+      } else if (action === 'restart') {
+        r = await API.api(API.PATHS.serverRestart(srv.id));
       } else {
-        r = await API.api(API.PATHS.serverStart(srv.id));
+        UI.toast('Неизвестное действие', 'err');
+        return;
       }
-    } else if (action === 'stop') {
-      r = await API.api(API.PATHS.serverStop(srv.id));
-    } else if (action === 'restart') {
-      r = await API.api(API.PATHS.serverRestart(srv.id));
-    } else {
-      UI.toast('Неизвестное действие', 'err');
-      return;
+    } finally {
+      // При ошибке — возвращаем кнопки в исходное состояние.
+      // При успехе — НЕ трогаем: silentRefresh через 2 сек сам обновит UI
+      // через loadServer() → updateDetailUI(), и кнопки получат
+      // корректный disabled-state под новый статус.
+      if (!r || !r.success) {
+        detailBtns.forEach(b => { b.disabled = false; });
+        updateDetailUI();
+      }
     }
 
-    if (r.success) {
+    if (r && r.success) {
       UI.toast(`Команда «${action}» отправлена`, 'ok');
       if (global.Audit) Audit.log('server.' + action, { useOwnCredits: opts.useOwnCredits });
       // Обновим через 2 сек
@@ -337,7 +356,7 @@
         }
         await silentRefresh();
       }, 2000);
-    } else {
+    } else if (r) {
       UI.toast(r.error || `Ошибка команды ${action}`, 'err');
     }
   }
@@ -386,6 +405,10 @@
     const sl = document.getElementById('ram-sl');
     const ram = parseInt(sl.value);
     if (!Number.isFinite(ram)) return;
+    if (ram < 2 || ram > 16) {
+      UI.toast('RAM должен быть от 2 до 16 GB', 'err');
+      return;
+    }
     UI.activity('Сохранение RAM...');
     const r = await API.api(API.PATHS.serverRam(currentSrv.id), 'POST', { ram });
     if (r.success) {

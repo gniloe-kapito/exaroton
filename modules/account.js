@@ -89,13 +89,60 @@
             <span class="account-row-val">exaroton API v1</span>
           </div>
         </div>
+      </div>
+      <div class="section-card">
+        <div class="section-card-title">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+          Прямой режим скачивания (минуя Worker)
+        </div>
+        <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px;">
+          Cloudflare Worker имеет лимит ~100 MB на ответ. Для скачивания целого мира (мир может весить 200+ МБ)
+          это критично. Если ввести сюда твой exaroton API-токен, фронтенд будет качать файлы напрямую с
+          api.exaroton.com, минуя Worker — без лимита.
+          <br /><br />
+          <strong style="color:var(--amber-text);">⚠ Небезопасно:</strong> токен хранится в localStorage и виден в DevTools.
+          Используй только на личном устройстве, не на публичных компьютерах.
+          Токен можно получить на <a href="https://exaroton.com/account/settings" target="_blank" style="color:var(--blue-text);">exaroton.com → Settings → API</a>.
+          <br /><br />
+          Токен применяется только к <strong>скачиванию файлов</strong> (single download + ZIP-архивы).
+          Остальные функции (старт/стоп сервера, команды, настройки) продолжат работать через Worker.
+        </div>
+        <div class="account-row" style="border:none;padding:8px 0;">
+          <span class="account-row-label">Прямой режим</span>
+          <span class="account-row-val">
+            ${API.isDirectMode()
+              ? '<span class="verified-badge">✓ Активен</span>'
+              : '<span class="unverified-badge">Не настроен</span>'}
+          </span>
+        </div>
+        <div class="cmd-row" style="margin-top:8px;">
+          <input type="password" id="direct-token-input" placeholder="Вставь exaroton API-токен" style="flex:1;padding:8px 11px;font-family:var(--mono);font-size:12px;border:1px solid var(--border2);border-radius:var(--radius-xs);background:var(--bg);color:var(--text);outline:none;" />
+          <button class="btn btn-green btn-sm" onclick="Account.saveDirectToken()">Сохранить</button>
+          ${API.isDirectMode() ? '<button class="btn btn-red btn-sm" onclick="Account.clearDirectToken()">Удалить</button>' : ''}
+        </div>
       </div>`;
     // Также отрендерим лог аудита (если мы на странице аккаунта)
     if (global.Audit) Audit.renderInAccount();
   }
 
+  function saveDirectToken() {
+    const el = document.getElementById('direct-token-input');
+    if (!el) return;
+    const token = el.value.trim();
+    if (!token) { UI.toast('Введи токен', 'err'); return; }
+    API.setDirectToken(token);
+    UI.toast('Прямой режим включён', 'ok');
+    renderAccountPage();
+  }
+
+  function clearDirectToken() {
+    API.setDirectToken('');
+    UI.toast('Прямой режим выключен', 'ok');
+    renderAccountPage();
+  }
+
   function getData() { return accountData; }
 
   // ── Export ──────────────────────────────────────────────────────
-  global.Account = { load, getData, updateTopbar };
+  global.Account = { load, getData, updateTopbar, saveDirectToken, clearDirectToken };
 })(window);

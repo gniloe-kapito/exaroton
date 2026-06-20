@@ -474,11 +474,13 @@
   // РЕНДЕР ПО ЧАНКАМ: после каждого чанка ставим await, чтобы UI дышал.
   // onProgress(chunkIdx, totalChunks) — колбек для прогресса.
   // onChunk(chunk) — колбек для сбора статистики по каждому чанку.
+  // isCancelled() — если возвращает true, рендер прерывается (модалка закрыта).
   async function renderMap(canvas, chunks, options = {}) {
     const showGrid = options.showGrid !== false;
     const maxY = options.maxY || 319;
     const onProgress = options.onProgress;
     const onChunk = options.onChunk;
+    const isCancelled = options.isCancelled || (() => false);
 
     canvas.width = 512;
     canvas.height = 512;
@@ -498,6 +500,7 @@
 
     let rendered = 0;
     for (const idx of validChunkIndices) {
+      if (isCancelled()) return; // модалка закрыта — прервать рендер
       const cz = Math.floor(idx / 32);
       const cx = idx % 32;
       const chunk = chunks[idx];
@@ -540,6 +543,8 @@
       }
     }
 
+    if (isCancelled()) return;
+
     // Сетка чанков
     if (showGrid) {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
@@ -560,10 +565,12 @@
   // ── Отрисовать СРЕЗ на конкретной высоте Y ──────────────────────
   // Берём блок на (x, sliceY, z) для каждого столбца, без поиска верхнего.
   // Полезно для просмотра пещер, шахт, конкретных слоёв руды.
+  // isCancelled() — если возвращает true, рендер прерывается.
   async function renderSlice(canvas, chunks, sliceY, options = {}) {
     const showGrid = options.showGrid !== false;
     const onProgress = options.onProgress;
     const onChunk = options.onChunk;
+    const isCancelled = options.isCancelled || (() => false);
 
     canvas.width = 512;
     canvas.height = 512;
@@ -580,6 +587,7 @@
 
     let rendered = 0;
     for (const idx of validChunkIndices) {
+      if (isCancelled()) return; // модалка закрыта — прервать рендер
       const cz = Math.floor(idx / 32);
       const cx = idx % 32;
       const chunk = chunks[idx];
@@ -617,6 +625,8 @@
         await new Promise(r => setTimeout(r, 0));
       }
     }
+
+    if (isCancelled()) return;
 
     if (showGrid) {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';

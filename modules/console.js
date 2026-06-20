@@ -77,15 +77,18 @@
     const container = document.getElementById('user-cmd-templates');
     if (!container) return;
     const defaultCmds = ['list', 'save-all', 'save-on', 'save-off', 'tps', 'mem', 'time set day', 'time set night', 'weather clear', 'stop'];
-    const defaultsHtml = defaultCmds.map(c =>
-      `<button class="btn btn-sm" onclick="Console.quickCmd('${UI.escapeHtml(c)}')">${UI.escapeHtml(c)}</button>`
-    ).join('');
-    const userHtml = cmdTemplates.length ? cmdTemplates.map((c, i) =>
-      `<button class="btn btn-sm" style="position:relative;padding-right:20px;" onclick="Console.quickCmd('${UI.escapeHtml(c)}')" title="${UI.escapeHtml(c)}">
-        ${UI.escapeHtml(c.length > 20 ? c.slice(0, 18) + '…' : c)}
+    const defaultsHtml = defaultCmds.map(c => {
+      const enc = UI.encodeForJsAttr(c);
+      return `<button class="btn btn-sm" onclick="Console.quickCmd('${enc}')">${UI.escapeHtml(c)}</button>`;
+    }).join('');
+    const userHtml = cmdTemplates.length ? cmdTemplates.map((c, i) => {
+      const enc = UI.encodeForJsAttr(c);
+      const short = c.length > 20 ? c.slice(0, 18) + '…' : c;
+      return `<button class="btn btn-sm" style="position:relative;padding-right:20px;" onclick="Console.quickCmd('${enc}')" title="${UI.escapeHtml(c)}">
+        ${UI.escapeHtml(short)}
         <span style="position:absolute;top:-4px;right:-2px;width:14px;height:14px;border-radius:50%;background:var(--red);color:white;font-size:9px;line-height:14px;text-align:center;cursor:pointer;" onclick="event.stopPropagation();Console.removeCmdTemplate(${i})">×</span>
-      </button>`
-    ).join('') : '<span style="font-size:11px;color:var(--text3);">Своих шаблонов ещё нет — нажми «+ команда»</span>';
+      </button>`;
+    }).join('') : '<span style="font-size:11px;color:var(--text3);">Своих шаблонов ещё нет — нажми «+ команда»</span>';
     container.innerHTML = defaultsHtml + userHtml;
   }
 
@@ -97,40 +100,79 @@
     lastConsoleHtml = '';
     lastStats = { heap: null, stats: null, tick: null };
     clearConsoleLog();
-    clearLiveStats();
+    renderLiveStats();  // сразу рисуем карточки с "ожидание данных"
     renderQuickCmds();
+    renderPlayersInline();
     // Подключаем WS
     connectWS();
     // Первичная загрузка лога через HTTP (на случай если WS ещё не готов)
     refreshLog();
     updateWSIndicator();
+    // Обновление онлайн-игроков в консоли (по таймеру)
+    refreshPlayersInline();
+    startPlayersInlineTimer();
   }
 
   // ── Подключение WS ──────────────────────────────────────────────
+  let wsReconnectToastShown = false; // чтобы не показывать тост при каждом retry
+
   function connectWS() {
     const srv = Servers.getCurrent();
     if (!srv) return;
     try {
-      ws = new ExarotonWS(srv.id);
+      // Передаём текущий статус сервера, чтобы ws.js сразу знал,
+      // какие стримы можно стартовать (heap/stats/tick только при ONLINE)
+      ws = new ExarotonWS(srv.id, srv.status);
       ws
         .on('open', () => { updateWSIndicator('connecting'); })
         .on('ready', () => {
           updateWSIndicator('connecting');
-          // Подпишемся на все live-стримы
+          // Подпишемся на все live-стримы.
+          // ws.js сам решит какие можно стартовать сейчас (на основе статуса),
+          // а когда сервер станет ONLINE — запустит heap/stats/tick.
           ws.subscribe('status');
           ws.subscribe('console', { tail: 0 });
           ws.subscribe('heap');
           ws.subscribe('stats');
           ws.subscribe('tick');
         })
-        .on('connected', () => { updateWSIndicator('on'); })
-        .on('disconnected', () => { updateWSIndicator('off'); })
-        .on('close', () => { updateWSIndicator('off'); })
+        .on('connected', () => {
+          updateWSIndicator('on');
+          if (wsReconnectToastShown) {
+            UI.toast('Live-соединение восстановлено', 'ok');
+            wsReconnectToastShown = false;
+          }
+        })
+        .on('disconnected', () => {
+          updateWSIndicator('off');
+          if (!wsReconnectToastShown) {
+            UI.toast('Live-соединение потеряно, переподключение...', 'warn', 4000);
+            wsReconnectToastShown = true;
+          }
+        })
+        .on('close', () => {
+          updateWSIndicator('off');
+          if (!wsReconnectToastShown) {
+            UI.toast('WebSocket отключён, переподключение...', 'warn', 4000);
+            wsReconnectToastShown = true;
+          }
+        })
         .on('status', (data) => {
           // Real-time обновление статуса сервера
           if (data && Servers.getCurrent()) {
+            const prevStatus = Servers.getCurrent().status;
             Servers.getCurrent().status = data.status;
             Servers.updateDetailUI();
+            // Если сервер стал ONLINE — сбросим live-stats чтобы UI показал свежие данные
+            if (prevStatus !== 1 && data.status === 1) {
+              lastStats = { heap: null, stats: null, tick: null };
+              renderLiveStats();
+            }
+            // Если OFFLINE — почистим live-stats
+            if (data.status === 0) {
+              lastStats = { heap: null, stats: null, tick: null };
+              renderLiveStats();
+            }
           }
         })
         .on('consoleLine', (rawLine) => {
@@ -170,6 +212,7 @@
       try { ws.disconnect(); } catch {}
       ws = null;
     }
+    wsReconnectToastShown = false;
   }
 
   // ── Fallback: поллинг каждые 8 секунд ───────────────────────────
@@ -359,7 +402,9 @@
     setTimeout(() => refreshLog(), 800);
   }
 
-  function quickCmd(cmd) {
+  function quickCmd(encCmd) {
+    let cmd = encCmd;
+    try { cmd = decodeURIComponent(encCmd); } catch {}
     const inp = document.getElementById('cmd-in');
     if (inp) inp.value = cmd;
     sendCmd();
@@ -417,8 +462,8 @@
 
   // ── Live stats (heap/tick/stats) ────────────────────────────────
   function clearLiveStats() {
-    const row = document.getElementById('live-stats-row');
-    if (row) row.innerHTML = '';
+    lastStats = { heap: null, stats: null, tick: null };
+    renderLiveStats();
   }
 
   function renderLiveStats() {
@@ -428,15 +473,33 @@
     const tick = lastStats.tick;
     const stats = lastStats.stats;
 
-    const heapPct = heap && Number.isFinite(heap.used) && Number.isFinite(heap.total)
-      ? Math.min(100, (heap.used / heap.total) * 100)
+    // Heap: exaroton шлёт { used, total } или { used, max } — поддержим оба варианта
+    const heapUsed = heap?.used ?? heap?.committed ?? null;
+    const heapTotal = heap?.total ?? heap?.max ?? null;
+    const heapPct = (heapUsed != null && heapTotal != null && heapTotal > 0)
+      ? Math.min(100, (heapUsed / heapTotal) * 100)
       : null;
-    const heapUsedStr = heap && Number.isFinite(heap.used) ? UI.formatBytes(heap.used) : '—';
-    const heapTotalStr = heap && Number.isFinite(heap.total) ? UI.formatBytes(heap.total) : '—';
+    const heapUsedStr = (heapUsed != null) ? UI.formatBytes(heapUsed) : '—';
+    const heapTotalStr = (heapTotal != null) ? UI.formatBytes(heapTotal) : '—';
 
-    const tps = tick?.tps;
-    const tickMs = tick?.averageTickTime;
+    // TPS: exaroton шлёт { averageTickTime, ... } в tick stream.
+    // tps вычисляется в ws.js, но проверим несколько возможных полей на всякий случай.
+    const tps = tick?.tps ?? (tick?.averageTickTime != null ? Math.round(Math.min(1000 / tick.averageTickTime, 20) * 10) / 10 : null);
+    const tickMs = tick?.averageTickTime ?? tick?.avgTickTime ?? null;
     const tpsColor = tps == null ? 'var(--text3)' : (tps >= 19 ? 'var(--green-text)' : (tps >= 15 ? 'var(--amber-text)' : 'var(--red-text)'));
+
+    // Stats: exaroton шлёт { cpu, world, players, ... } или { cpuUsage, ... } — поддержим оба
+    const cpuVal = stats?.cpu ?? stats?.cpuUsage ?? stats?.cpuLoad ?? null;
+    const worldVal = stats?.world ?? stats?.worlds ?? stats?.loadedWorlds ?? null;
+    const playersVal = stats?.players ?? stats?.playerCount ?? null;
+    const cpuNum = Number(cpuVal);
+    const cpuStr = (cpuVal != null && Number.isFinite(cpuNum)) ? cpuNum.toFixed(1) : '—';
+    const cpuColor = (cpuNum >= 90) ? 'var(--red-text)' : (cpuNum >= 70 ? 'var(--amber-text)' : 'var(--green-text)');
+
+    // Подсказка: если сервер не ONLINE — показываем "сервер оффлайн"
+    const srv = Servers.getCurrent();
+    const isOnline = srv?.status === 1;
+    const offlineHint = isOnline ? 'ожидание данных...' : 'сервер должен быть онлайн';
 
     row.innerHTML = `
       <div class="live-stat-card">
@@ -446,7 +509,7 @@
         </div>
         <div class="live-stat-val">${heapUsedStr} <span style="font-size:13px;color:var(--text3)">/ ${heapTotalStr}</span></div>
         <div class="live-stat-bar">${heapPct != null ? `<div style="width:${heapPct.toFixed(1)}%;background:${heapPct > 85 ? 'var(--red)' : (heapPct > 65 ? 'var(--amber)' : 'var(--green)')}"></div>` : ''}</div>
-        <div class="live-stat-sub">${heapPct != null ? heapPct.toFixed(1) + '%' : 'ожидание данных...'}</div>
+        <div class="live-stat-sub">${heapPct != null ? heapPct.toFixed(1) + '%' : offlineHint}</div>
       </div>
       <div class="live-stat-card">
         <div class="live-stat-head">
@@ -455,15 +518,15 @@
         </div>
         <div class="live-stat-val" style="color:${tpsColor}">${tps != null ? tps.toFixed(1) : '—'} <span style="font-size:13px;color:var(--text3)">/ 20</span></div>
         <div class="live-stat-bar">${tps != null ? `<div style="width:${(tps/20*100).toFixed(1)}%;background:${tpsColor}"></div>` : ''}</div>
-        <div class="live-stat-sub">${tickMs != null ? tickMs.toFixed(2) + ' мс/тик' : 'ожидание данных...'}</div>
+        <div class="live-stat-sub">${tickMs != null ? tickMs.toFixed(2) + ' мс/тик' : offlineHint}</div>
       </div>
       <div class="live-stat-card">
         <div class="live-stat-head">
           <span class="live-stat-label">CPU / Stats</span>
           <span class="live-stat-dot ${stats ? 'on' : ''}"></span>
         </div>
-        <div class="live-stat-val" style="font-size:16px">${stats?.cpu?.toFixed?.(1) ?? '—'}<span style="font-size:13px;color:var(--text3)">%</span></div>
-        <div class="live-stat-sub">CPU ${stats?.cpu != null ? stats.cpu.toFixed(1) + '%' : '—'} • World ${stats?.world ?? '—'} • Players ${stats?.players ?? '—'}</div>
+        <div class="live-stat-val" style="font-size:16px;color:${cpuColor}">${cpuStr}<span style="font-size:13px;color:var(--text3)">%</span></div>
+        <div class="live-stat-sub">CPU ${cpuStr}%${worldVal != null ? ' • World ' + worldVal : ''}${playersVal != null ? ' • Players ' + playersVal : ''}${cpuVal == null && worldVal == null && playersVal == null ? ' • ' + offlineHint : ''}</div>
       </div>`;
   }
 
@@ -471,6 +534,99 @@
   function onClose() {
     disconnectWS();
     stopPolling();
+    stopPlayersInlineTimer();
+  }
+
+  // ── Онлайн-игроки в консоли (быстрый kick/ban) ──────────────────
+  // Список игроков берётся из Servers.getCurrent().players.list
+  // и обновляется по silentRefresh (каждые 30 сек в servers.js).
+  // Здесь мы ререндерим список при onOpenServer + каждые 15 сек (timer).
+  let playersInlineTimer = null;
+
+  function startPlayersInlineTimer() {
+    stopPlayersInlineTimer();
+    playersInlineTimer = setInterval(() => {
+      if (currentDetailTab === 'console') refreshPlayersInline();
+    }, 15000);
+  }
+  function stopPlayersInlineTimer() {
+    clearInterval(playersInlineTimer);
+    playersInlineTimer = null;
+  }
+
+  function refreshPlayersInline() {
+    const srv = Servers.getCurrent();
+    if (!srv) return;
+    // silentRefresh в servers.js обновляет srv.players, но не всегда есть .list
+    // (exaroton иногда не отдаёт список ников). Поэтому ререндерим по текущим данным.
+    renderPlayersInline();
+  }
+
+  function renderPlayersInline() {
+    const el = document.getElementById('console-players-list');
+    if (!el) return;
+    const srv = Servers.getCurrent();
+    if (!srv || !srv.players) {
+      el.innerHTML = '<span style="font-size:11px;color:var(--text3);">Нет данных об игроках</span>';
+      return;
+    }
+    const players = srv.players;
+    const list = players.list || [];
+    if (!players.count || !list.length) {
+      el.innerHTML = `<span style="font-size:11px;color:var(--text3);">${players.count ? players.count + ' игрок(ов) онлайн (список ников недоступен)' : 'Нет игроков онлайн'}</span>`;
+      return;
+    }
+    el.innerHTML = list.map(name => {
+      const enc = encodeURIComponent(name);
+      return `<div class="console-player-row">
+        <span class="console-player-name" title="${UI.escapeHtml(name)}">${UI.escapeHtml(name)}</span>
+        <div class="console-player-actions">
+          <button class="btn btn-xs" title="Кикнуть с причиной timeout" onclick="Console.kickPlayer('${enc}')">Kick</button>
+          <button class="btn btn-xs btn-red" title="Забанить с причиной timeout" onclick="Console.banPlayer('${enc}')">Ban</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function kickPlayer(encodedName) {
+    const name = decodeURIComponent(encodedName);
+    const srv = Servers.getCurrent();
+    if (!srv) return;
+    // Стандартный kick: /kick <nick> <reason>
+    const cmd = `kick ${name} timeout`;
+    UI.activity(`Кик ${name}...`);
+    const r = await API.api(API.PATHS.serverCommand(srv.id), 'POST', { command: cmd });
+    if (r.success) {
+      UI.toast(`${name} кикнут (timeout)`, 'ok');
+      if (global.Audit) Audit.log('console.command', { command: cmd });
+    } else {
+      UI.toast(r.error || `Не удалось кикнуть ${name}`, 'err');
+    }
+  }
+
+  async function banPlayer(encodedName) {
+    const name = decodeURIComponent(encodedName);
+    const srv = Servers.getCurrent();
+    if (!srv) return;
+    const confirmed = await UI.confirmModal({
+      title: `Забанить ${name}?`,
+      message: `Игрок ${name} будет забанен на сервере с причиной "timeout". Продолжить?`,
+      okLabel: 'Забанить',
+      danger: true,
+    });
+    if (!confirmed) return;
+    // /ban <nick> <reason>
+    const cmd = `ban ${name} timeout`;
+    UI.activity(`Бан ${name}...`);
+    const r = await API.api(API.PATHS.serverCommand(srv.id), 'POST', { command: cmd });
+    if (r.success) {
+      UI.toast(`${name} забанен (timeout)`, 'ok');
+      if (global.Audit) Audit.log('console.command', { command: cmd });
+      // Обновим список онлайн-игроков (через секунду, чтобы команда успела выполниться)
+      setTimeout(() => Servers.silentRefresh(), 1500);
+    } else {
+      UI.toast(r.error || `Не удалось забанить ${name}`, 'err');
+    }
   }
 
   // ── Init: загрузка истории команд + шаблонов ────────────────────
@@ -486,5 +642,6 @@
     handleCmdKeydown,
     clearCmdHistory: () => { cmdHistory = []; saveCmdHistory(); UI.toast('История команд очищена'); },
     addCmdTemplate, removeCmdTemplate, renderQuickCmds,
+    kickPlayer, banPlayer, refreshPlayersInline, renderPlayersInline,
   };
 })(window);

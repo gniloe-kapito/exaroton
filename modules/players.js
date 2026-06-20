@@ -44,23 +44,30 @@
       el.innerHTML = `<div class="empty-state" style="padding:1.25rem;"><p>${players.count} игрок(ов) онлайн — список ников недоступен</p></div>`;
       return;
     }
-    el.innerHTML = '<div class="player-list">' + list.map(name => `
-      <div class="player-row">
+    el.innerHTML = '<div class="player-list">' + list.map(name => {
+      const enc = UI.encodeForJsAttr(name);
+      return `<div class="player-row">
         <div class="player-name">
           <div class="player-avatar">${UI.escapeHtml(UI.initials(name))}</div>
           ${UI.escapeHtml(name)}
         </div>
         <div class="player-actions">
-          <button class="btn player-btn" title="Выдать OP" onclick="Players.quickCmd('op ${UI.escapeHtml(name)}')">OP</button>
-          <button class="btn player-btn" title="Деоп" onclick="Players.quickCmd('deop ${UI.escapeHtml(name)}')">Deop</button>
-          <button class="btn player-btn" title="Кикнуть" onclick="Players.quickCmd('kick ${UI.escapeHtml(name)}')">Kick</button>
-          <button class="btn player-btn btn-red" title="Забанить" onclick="Players.quickCmd('ban ${UI.escapeHtml(name)}')">Ban</button>
+          <button class="btn player-btn" title="Выдать OP" onclick="Players.quickCmd('${enc}','op')">OP</button>
+          <button class="btn player-btn" title="Деоп" onclick="Players.quickCmd('${enc}','deop')">Deop</button>
+          <button class="btn player-btn" title="Кикнуть" onclick="Players.quickCmd('${enc}','kick')">Kick</button>
+          <button class="btn player-btn btn-red" title="Забанить" onclick="Players.quickCmd('${enc}','ban')">Ban</button>
         </div>
-      </div>`).join('') + '</div>';
+      </div>`;
+    }).join('') + '</div>';
   }
 
-  function quickCmd(cmd) {
-    if (global.Console) Console.quickCmd(cmd);
+  // encName — encodeURIComponent-кодированный ник игрока; action — префикс команды (op/deop/kick/ban).
+  function quickCmd(encName, action) {
+    let name = encName;
+    try { name = decodeURIComponent(encName); } catch {}
+    const cmd = action ? `${action} ${name}` : name;
+    // Console.quickCmd ожидает закодированную строку (encodeURIComponent).
+    if (global.Console) Console.quickCmd(encodeURIComponent(cmd));
   }
 
   // ── Загрузка доступных списков ──────────────────────────────────
@@ -106,21 +113,24 @@
     }
     el.innerHTML = '<div class="player-list-grid">' + availableLists.map(name => {
       const entries = listContents[name] || [];
+      const encList = UI.encodeForJsAttr(name);
       return `<div class="player-list-card">
         <div class="player-list-card-head">
           <span class="player-list-card-name">${UI.escapeHtml(API.playerListLabel(name))}</span>
           <span class="player-list-card-count">${entries.length}</span>
         </div>
         <div class="player-list-entries" id="pl-entries-${UI.escapeHtml(name)}">
-          ${entries.length ? entries.map(n => `
-            <span class="player-chip">
+          ${entries.length ? entries.map(n => {
+            const enc = UI.encodeForJsAttr(n);
+            return `<span class="player-chip">
               ${UI.escapeHtml(n)}
-              <button title="Удалить" onclick="Players.removeEntry('${UI.escapeHtml(name)}','${UI.escapeHtml(n)}')">×</button>
-            </span>`).join('') : '<span style="font-size:11px;color:var(--text3)">Список пуст</span>'}
+              <button title="Удалить" onclick="Players.removeEntry('${encList}','${enc}')">×</button>
+            </span>`;
+          }).join('') : '<span style="font-size:11px;color:var(--text3)">Список пуст</span>'}
         </div>
         <div class="cmd-row">
-          <input type="text" placeholder="${name === 'banned-ips' ? 'IP или ник' : 'Ник игрока'}" id="pl-input-${UI.escapeHtml(name)}" style="font-size:12px;" onkeydown="if(event.key==='Enter')Players.addEntry('${UI.escapeHtml(name)}')" />
-          <button class="btn btn-green btn-sm" onclick="Players.addEntry('${UI.escapeHtml(name)}')">+</button>
+          <input type="text" placeholder="${name === 'banned-ips' ? 'IP или ник' : 'Ник игрока'}" id="pl-input-${UI.escapeHtml(name)}" style="font-size:12px;" onkeydown="if(event.key==='Enter')Players.addEntry('${encList}')" />
+          <button class="btn btn-green btn-sm" onclick="Players.addEntry('${encList}')">+</button>
         </div>
       </div>`;
     }).join('') + '</div>';
@@ -128,9 +138,12 @@
 
   // ── Добавление записи ───────────────────────────────────────────
   // ПРАВИЛЬНО: PUT /playerlists/{list}/ с {entries: [name]}
-  async function addEntry(listName) {
+  // encListName — encodeURIComponent-кодированное имя списка.
+  async function addEntry(encListName) {
     const srv = Servers.getCurrent();
     if (!srv) return;
+    let listName = encListName;
+    try { listName = decodeURIComponent(encListName); } catch {}
     const input = document.getElementById('pl-input-' + listName);
     if (!input) return;
     const name = input.value.trim();
@@ -150,9 +163,13 @@
 
   // ── Удаление записи ─────────────────────────────────────────────
   // ПРАВИЛЬНО: DELETE /playerlists/{list}/ с {entries: [name]} в body
-  async function removeEntry(listName, name) {
+  // encListName/encName — encodeURIComponent-кодированные значения.
+  async function removeEntry(encListName, encName) {
     const srv = Servers.getCurrent();
     if (!srv) return;
+    let listName = encListName, name = encName;
+    try { listName = decodeURIComponent(encListName); } catch {}
+    try { name = decodeURIComponent(encName); } catch {}
     const confirmed = await UI.confirmModal({
       title: 'Удалить запись?',
       message: `Удалить «${name}» из списка «${API.playerListLabel(listName)}»?`,
